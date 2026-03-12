@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoGo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+#map { height:100vh; width:100vw; }
+
+#topbar {
+  position:fixed; top:0; left:0; right:0; z-index:1000;
+  padding:12px 16px; display:flex; align-items:center; gap:10px;
+  background:rgba(255,255,255,0.92); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(0,0,0,0.08); box-shadow:0 2px 16px rgba(0,0,0,0.1);
+}
+#searchWrap {
+  flex:1; display:flex; align-items:center; position:relative;
+  background:#f1f3f4; border-radius:24px; padding:0 16px; gap:8px; height:42px; transition:background .2s;
+}
+#searchWrap:focus-within { background:#fff; box-shadow:0 0 0 2px #4285f4; }
+#searchWrap > svg { flex-shrink:0; opacity:.45; }
+#searchInput { flex:1; border:none; outline:none; background:transparent; font-size:15px; color:#202124; }
+#searchInput::placeholder { color:#9aa0a6; }
+#suggestions {
+  position:absolute; top:calc(100% + 6px); left:0; right:0;
+  background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  overflow:hidden; z-index:1100; display:none;
+}
+#suggestions.open { display:block; }
+.sug-item { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; font-size:14px; color:#3c4043; transition:background .12s; border:none; background:none; width:100%; text-align:left; }
+.sug-item:hover { background:#f1f3f4; }
+.sug-name { font-weight:500; }
+.sug-sub { font-size:12px; color:#9aa0a6; margin-top:1px; }
+.sug-sep { font-size:11px; font-weight:600; letter-spacing:.7px; color:#9aa0a6; text-transform:uppercase; padding:8px 16px 4px; display:block; }
+
+/* крестик удаления из истории */
+.sug-del {
+  width:24px; height:24px; border-radius:50%; border:none; background:none;
+  color:#c5c8cc; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; margin-left:auto; padding:0;
+  transition:background .15s, color .15s;
+  position:relative; z-index:10;
+}
+.sug-del:hover { background:#fee8e8; color:#d93025; }
+/* строка истории: основная часть кликается, крестик — отдельно */
+.hist-row { display:flex; align-items:center; gap:10px; padding:0 16px; transition:background .12s; }
+.hist-row:hover { background:#f1f3f4; }
+.hist-row:hover .sug-del { color:#9aa0a6; }
+.hist-btn { flex:1; display:flex; align-items:center; gap:10px; padding:10px 0; cursor:pointer; border:none; background:none; text-align:left; font-size:14px; color:#3c4043; min-width:0; }
+
+/* заголовок секции истории с кнопкой очистки */
+.sug-sep-row { display:flex; align-items:center; justify-content:space-between; padding:8px 16px 4px; }
+.sug-sep-row .sug-sep { padding:0; display:inline; }
+.hist-clear-all { border:none; background:none; color:#9aa0a6; font-size:11px; font-weight:600; cursor:pointer; padding:3px 6px; border-radius:8px; transition:background .15s,color .15s; letter-spacing:.2px; }
+.hist-clear-all:hover { background:#fee8e8; color:#d93025; }
+
+
+
+#shareBtn { width:42px; height:42px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; border:none; cursor:pointer; color:#5f6368; transition:all .18s; }
+#shareBtn:hover { background:#e8f0fe; color:#4285f4; }
+#shareBtn:active { transform:scale(.92); }
+
+#sidebar { position:fixed; right:16px; bottom:40px; z-index:1000; display:flex; flex-direction:column; gap:10px; align-items:center; transition:bottom .35s cubic-bezier(.4,0,.2,1); }
+#sidebar.lifted { bottom:230px; }
+.fab { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; position:relative; box-shadow:0 2px 10px rgba(0,0,0,0.18); transition:transform .18s,box-shadow .18s,background .18s,color .18s; }
+.fab:hover { transform:scale(1.08); box-shadow:0 4px 18px rgba(0,0,0,0.22); }
+.fab:active { transform:scale(.93); }
+#rulerBtn { background:#fff; color:#5f6368; }
+#rulerBtn.on { background:#4285f4; color:#fff; box-shadow:0 2px 14px rgba(66,133,244,.5); }
+#routeBtn { background:#fff; color:#5f6368; }
+#routeBtn.on { background:#4285f4; color:#fff; box-shadow:0 2px 14px rgba(66,133,244,.5); }
+#pinBtn { background:#fff; color:#5f6368; }
+#pinBtn.on { background:#4285f4; color:#fff; box-shadow:0 2px 14px rgba(66,133,244,.5); }
+body.pin-mode #map { cursor:crosshair !important; }
+body.route-mode #map { cursor:crosshair !important; }
+#menuBtn { background:#fff; color:#5f6368; }
+#menuBtn.open { background:#e8f0fe; color:#4285f4; }
+#locBtn { background:#fff; color:#4285f4; }
+#locBtn.active { background:#4285f4; color:#fff; }
+#locBtn::after { content:''; position:absolute; inset:-4px; border-radius:50%; border:2px solid rgba(66,133,244,0.4); animation:locping 2.2s ease-out infinite; }
+@keyframes locping { 0%{opacity:.6;transform:scale(1)} 100%{opacity:0;transform:scale(1.6)} }
+
+.custom-pin { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
+.custom-pin .pin-head { width:28px; height:28px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; background:#4285f4; border:2.5px solid #fff; box-shadow:0 3px 10px rgba(66,133,244,.5); }
+.custom-pin .pin-head svg { transform:rotate(45deg); }
+.custom-pin .pin-tail { width:2px; height:8px; background:#4285f4; margin-top:-1px; border-radius:0 0 2px 2px; }
+
+#pinDialog { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.9); z-index:3000; background:#fff; border-radius:20px; box-shadow:0 16px 48px rgba(0,0,0,0.22); padding:20px; width:280px; opacity:0; pointer-events:none; transition:opacity .2s,transform .22s cubic-bezier(.34,1.4,.64,1); }
+#pinDialog.show { opacity:1; pointer-events:all; transform:translate(-50%,-50%) scale(1); }
+#pinDialogOverlay { position:fixed; inset:0; z-index:2999; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .2s; }
+#pinDialogOverlay.show { opacity:1; pointer-events:all; }
+#pinDialog h3 { font-size:16px; font-weight:600; color:#202124; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+#pinDialog h3 svg { color:#4285f4; }
+#pinLabelInput { width:100%; border:1.5px solid #e0e0e0; border-radius:12px; padding:10px 14px; font-size:14px; color:#202124; outline:none; transition:border-color .18s; font-family:inherit; }
+#pinLabelInput:focus { border-color:#4285f4; }
+#pinLabelInput::placeholder { color:#9aa0a6; }
+.pin-dialog-btns { display:flex; gap:8px; margin-top:14px; }
+.pin-dialog-btns button { flex:1; padding:10px; border-radius:12px; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
+#pinCancelBtn { background:#f1f3f4; color:#5f6368; }
+#pinConfirmBtn { background:#4285f4; color:#fff; }
+.pin-popup { min-width:120px; }
+.pin-popup .pin-popup-name { font-weight:600; font-size:14px; color:#202124; margin-bottom:6px; }
+.pin-popup .pin-popup-del { display:flex; align-items:center; gap:5px; background:none; border:none; color:#4285f4; font-size:12px; font-weight:600; cursor:pointer; padding:0; font-family:inherit; }
+
+#mapMenu { position:fixed; right:68px; bottom:40px; z-index:999; background:rgba(255,255,255,0.97); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,0.18); padding:10px 8px 12px; display:flex; flex-direction:column; gap:0; width:220px; transform:scale(0.88) translateX(12px); transform-origin:right bottom; opacity:0; pointer-events:none; transition:transform .24s cubic-bezier(.34,1.56,.64,1),opacity .18s ease,bottom .35s cubic-bezier(.4,0,.2,1); max-height:82vh; overflow-y:auto; }
+#mapMenu.lifted { bottom:230px; }
+#mapMenu.open { transform:scale(1) translateX(0); opacity:1; pointer-events:all; }
+.menu-title { font-size:10px; font-weight:700; letter-spacing:.9px; color:#9aa0a6; text-transform:uppercase; padding:6px 12px 5px; display:block; }
+.menu-sep { height:1px; background:#f1f3f4; margin:5px 8px; }
+.mbase-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:0 6px 4px; }
+.mbase-btn { display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px 7px; border-radius:14px; cursor:pointer; border:1.5px solid #e8eaed; background:#fff; font-size:11px; font-weight:600; color:#5f6368; transition:all .18s; }
+.mbase-btn:hover { background:#f8f9fa; }
+.mbase-btn.on { border-color:#4285f4; background:#e8f0fe; color:#1a73e8; }
+.mbase-btn .mb-ico { width:42px; height:30px; border-radius:8px; overflow:hidden; flex-shrink:0; background:#e8eaed; }
+.mbase-btn .mb-ico img { width:100%; height:100%; object-fit:cover; }
+.mlay { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px; cursor:pointer; border:none; background:none; width:100%; text-align:left; transition:background .15s; }
+.mlay:hover { background:#f1f3f4; }
+.mlay-ico { width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; color:#5f6368; transition:background .2s,color .2s; }
+.mlay.on .mlay-ico { background:#e8f0fe; color:#4285f4; }
+.mlay-info { flex:1; }
+.mlay-name { font-size:13px; font-weight:600; color:#3c4043; }
+.mlay-sub { font-size:10px; color:#9aa0a6; }
+.mlay-toggle { width:32px; height:19px; border-radius:10px; background:#dde1e5; flex-shrink:0; position:relative; transition:background .2s; }
+.mlay-toggle::after { content:''; position:absolute; width:15px; height:15px; top:2px; left:2px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.2); transition:transform .2s; }
+.mlay.on .mlay-toggle { background:#4285f4; }
+.mlay.on .mlay-toggle::after { transform:translateX(13px); }
+
+body.ruler-mode #map { cursor:crosshair !important; }
+#rulerHint { position:fixed; top:76px; left:50%; transform:translateX(-50%) translateY(-6px); z-index:1500; background:rgba(32,33,36,0.93); color:#fff; padding:8px 8px 8px 16px; border-radius:20px; font-size:13px; font-weight:500; box-shadow:0 4px 24px rgba(0,0,0,0.3); display:none; align-items:center; gap:10px; white-space:nowrap; opacity:0; transition:opacity .2s,transform .22s; }
+#rulerHint.show { display:flex; opacity:1; transform:translateX(-50%) translateY(0); }
+#rulerHint .hint-text { opacity:.65; }
+#rulerHint .dist-val { color:#7ab3f8; font-size:16px; font-weight:700; display:inline-flex; align-items:center; gap:6px; }
+#rulerClearBtn { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.8); padding:6px 14px; border-radius:14px; cursor:pointer; font-size:12px; font-weight:600; transition:background .15s; line-height:1; }
+#rulerClearBtn:hover { background:rgba(255,255,255,0.22); color:#fff; }
+.ruler-dot { width:14px; height:14px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(66,133,244,.6); cursor:grab; }
+.ruler-dot:active { cursor:grabbing; }
+.ruler-label { background:rgba(32,33,36,0.88); color:#fff; padding:3px 9px; border-radius:8px; font-size:11px; font-weight:700; white-space:nowrap; pointer-events:none; transform:translateX(-50%); display:inline-block; }
+
+#routeSheet { position:fixed; left:0; right:0; bottom:0; z-index:1200; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -4px 40px rgba(0,0,0,0.15); transform:translateY(100%); transition:transform .35s cubic-bezier(.4,0,.2,1); }
+#routeSheet.show { transform:translateY(0); }
+.rs-handle { width:36px; height:4px; background:#e0e0e0; border-radius:2px; margin:12px auto 0; }
+.rs-body { padding:14px 16px 20px; }
+.rs-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.rs-title { font-size:16px; font-weight:700; color:#202124; display:flex; align-items:center; gap:8px; }
+.rs-title-dot { width:8px; height:8px; border-radius:50%; background:#4285f4; animation:pulse-blue 2s ease infinite; }
+@keyframes pulse-blue { 0%,100%{box-shadow:0 0 0 0 rgba(66,133,244,.4)} 50%{box-shadow:0 0 0 6px rgba(66,133,244,0)} }
+#routeSheetClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; transition:background .15s,color .15s; }
+#routeSheetClose:hover { background:#e8f0fe; color:#4285f4; }
+
+.rs-inputs { background:#f8f9fa; border-radius:16px; overflow:hidden; border:1.5px solid #e8eaed; margin-bottom:14px; }
+.rs-field { display:flex; align-items:center; gap:12px; padding:13px 14px; min-height:50px; }
+.rs-field + .rs-field { border-top:1px solid #e8eaed; }
+.rs-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.rs-dot.start { background:#4285f4; }
+.rs-dot.end { background:#1a73e8; }
+.rs-field-label { flex:1; font-size:14px; color:#9aa0a6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rs-field-label.filled { color:#202124; font-weight:500; }
+.rs-field-clear { width:22px; height:22px; border-radius:50%; background:#e0e0e0; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; color:#5f6368; flex-shrink:0; transition:background .15s; }
+.rs-field-clear.vis { display:flex; }
+.rs-field-clear:hover { background:#e8f0fe; color:#4285f4; }
+
+.rs-tabs { display:flex; gap:8px; margin-bottom:14px; }
+.rs-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:10px 4px 9px; border-radius:16px; border:1.5px solid #e8eaed; background:#fff; cursor:pointer; transition:all .2s; }
+.rs-tab:hover { background:#f8f9fa; }
+.rs-tab.on { border-color:#4285f4; background:#e8f0fe; }
+.rs-tab-icon { color:#b0b4b8; transition:color .2s; }
+.rs-tab.on .rs-tab-icon { color:#4285f4; }
+.rs-tab-time { font-size:13px; font-weight:800; color:#9aa0a6; line-height:1; }
+.rs-tab.on .rs-tab-time { color:#1a73e8; }
+.rs-tab-time.loading { animation:tskel 0.8s ease infinite alternate; }
+@keyframes tskel { from{opacity:.3} to{opacity:.9} }
+.rs-tab-name { font-size:10px; font-weight:600; color:#9aa0a6; letter-spacing:.3px; }
+.rs-tab.on .rs-tab-name { color:#4285f4; }
+
+.rs-result { display:none; border-radius:16px; padding:14px 16px; align-items:center; gap:14px; background:#e8f0fe; border:1.5px solid rgba(66,133,244,.2); animation:rsfadein .25s ease; }
+@keyframes rsfadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.rs-result.show { display:flex; }
+.rs-result-icon { width:46px; height:46px; border-radius:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:rgba(66,133,244,.15); color:#4285f4; }
+.rs-result-main { flex:1; }
+.rs-result-time { font-size:28px; font-weight:900; color:#202124; line-height:1; letter-spacing:-.5px; }
+.rs-result-sub { font-size:12px; color:#9aa0a6; margin-top:2px; }
+.rs-result-dist { font-size:14px; font-weight:700; color:#5f6368; }
+
+.rm-start { width:16px; height:16px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(66,133,244,.6); }
+.rm-end { width:16px; height:16px; background:#1a73e8; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(26,115,232,.6); }
+
+.route-chip { position:fixed; top:76px; left:50%; transform:translateX(-50%) scale(0.9); z-index:1400; padding:9px 18px; border-radius:22px; font-size:13px; font-weight:600; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .22s,transform .22s; box-shadow:0 4px 20px rgba(0,0,0,.18); }
+.route-chip.show { opacity:1; transform:translateX(-50%) scale(1); }
+.route-chip.step-start { background:#4285f4; color:#fff; }
+.route-chip.step-end { background:#1a73e8; color:#fff; }
+
+#credit { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); z-index:999; font-size:11px; color:rgba(255,255,255,0.55); background:rgba(0,0,0,0.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); padding:4px 12px; border-radius:20px; white-space:nowrap; pointer-events:all; }
+#credit a { color:rgba(255,255,255,0.7); text-decoration:none; font-weight:600; transition:color .15s; }
+#credit a:hover { color:#fff; }
+#toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%) translateY(8px); z-index:4000; background:rgba(32,33,36,0.92); color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; font-weight:500; box-shadow:0 4px 16px rgba(0,0,0,0.25); opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.ok::before { content:'✓  '; color:#7ab3f8; }
+#toast.err::before { content:'✕  '; color:#f28b82; }
+.udot { width:16px; height:16px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 6px rgba(66,133,244,.6); animation:udot 2s ease-out infinite; }
+@keyframes udot { 0%{box-shadow:0 0 0 0 rgba(66,133,244,.6),0 2px 6px rgba(66,133,244,.4)} 100%{box-shadow:0 0 0 14px rgba(66,133,244,0),0 2px 6px rgba(66,133,244,.4)} }
+
+/* ── WIKIPEDIA PANEL ── */
+#wikiPanel {
+  position:fixed; left:0; right:0; bottom:0; z-index:1300;
+  background:#fff; border-radius:24px 24px 0 0;
+  box-shadow:0 -4px 40px rgba(0,0,0,0.15);
+  transform:translateY(100%);
+  transition:transform .35s cubic-bezier(.4,0,.2,1);
+  max-height:78vh; display:flex; flex-direction:column;
+}
+#wikiPanel.show { transform:translateY(0); }
+.wiki-handle { width:36px; height:4px; background:#e0e0e0; border-radius:2px; margin:12px auto 4px; flex-shrink:0; }
+.wiki-header { display:flex; align-items:center; gap:10px; padding:8px 16px 12px; flex-shrink:0; border-bottom:1px solid #f1f3f4; }
+.wiki-logo { width:32px; height:32px; border-radius:10px; background:#f1f3f4; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#4285f4; font-weight:900; font-size:17px; font-family:serif; }
+.wiki-header-text { flex:1; min-width:0; }
+.wiki-title { font-size:16px; font-weight:700; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wiki-dist { font-size:11px; color:#9aa0a6; margin-top:1px; }
+#wikiClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; flex-shrink:0; transition:background .15s,color .15s; }
+#wikiClose:hover { background:#e8f0fe; color:#4285f4; }
+.wiki-body { overflow-y:auto; padding:14px 16px 20px; flex:1; }
+.wiki-thumb { width:100%; max-height:180px; object-fit:cover; border-radius:14px; margin-bottom:14px; display:block; }
+.wiki-extract { font-size:14px; line-height:1.65; color:#3c4043; }
+.wiki-readmore {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  margin-top:16px; padding:12px; border-radius:14px;
+  background:#e8f0fe; border:none; cursor:pointer; width:100%;
+  font-size:14px; font-weight:600; color:#1a73e8; transition:background .15s;
+}
+.wiki-readmore:hover { background:#d2e3fc; }
+.wiki-loading { display:flex; flex-direction:column; align-items:center; gap:12px; padding:32px 16px; color:#9aa0a6; font-size:14px; }
+.wiki-spinner { width:32px; height:32px; border:3px solid #e8f0fe; border-top-color:#4285f4; border-radius:50%; animation:wspin .7s linear infinite; }
+@keyframes wspin { to{transform:rotate(360deg)} }
+.wiki-none { text-align:center; padding:32px 16px; color:#9aa0a6; font-size:14px; }
+.wiki-none svg { margin-bottom:10px; opacity:.3; }
+#wikiOverlay { position:fixed; inset:0; z-index:1299; background:rgba(0,0,0,0.25); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .25s; }
+#wikiOverlay.show { opacity:1; pointer-events:all; }
+
+.leaflet-bottom.leaflet-left { bottom:110px !important; left:16px !important; }
+.leaflet-control-zoom { border:none !important; box-shadow:0 2px 12px rgba(0,0,0,.15) !important; }
+.leaflet-control-zoom a { background:#fff !important; color:#5f6368 !important; border:none !important; font-weight:600 !important; width:36px !important; height:36px !important; line-height:36px !important; }
+.leaflet-control-zoom a:hover { background:#f1f3f4 !important; }
+.leaflet-control-zoom-in { border-radius:12px 12px 0 0 !important; }
+.leaflet-control-zoom-out { border-radius:0 0 12px 12px !important; }
+.leaflet-popup-content-wrapper { border-radius:14px !important; box-shadow:0 8px 24px rgba(0,0,0,.15) !important; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif !important; }
+.leaflet-popup-content { font-size:14px; color:#3c4043; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="searchWrap">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchInput" type="text" placeholder="Поиск городов и мест..." autocomplete="off">
+    <div id="suggestions"></div>
+  </div>
+  <button id="shareBtn" title="Поделиться">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+  </button>
+</div>
+
+<div id="routeSheet">
+  <div class="rs-handle"></div>
+  <div class="rs-body">
+    <div class="rs-header">
+      <div class="rs-title"><div class="rs-title-dot"></div>Маршрут</div>
+      <button id="routeSheetClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="rs-inputs">
+      <div class="rs-field">
+        <div class="rs-dot start"></div>
+        <div class="rs-field-label" id="rsStartLbl">Откуда...</div>
+        <button class="rs-field-clear" id="rsStartClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="rs-field">
+        <div class="rs-dot end"></div>
+        <div class="rs-field-label" id="rsEndLbl">Куда...</div>
+        <button class="rs-field-clear" id="rsEndClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="rs-tabs">
+      <button class="rs-tab on" data-mode="driving">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+        <span class="rs-tab-time" id="tt-driving">—</span>
+        <span class="rs-tab-name">Авто</span>
+      </button>
+      <button class="rs-tab" data-mode="cycling">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+        <span class="rs-tab-time" id="tt-cycling">—</span>
+        <span class="rs-tab-name">Вело</span>
+      </button>
+      <button class="rs-tab" data-mode="walking">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg></span>
+        <span class="rs-tab-time" id="tt-walking">—</span>
+        <span class="rs-tab-name">Пешком</span>
+      </button>
+    </div>
+    <div class="rs-result" id="rsResult" data-mode="driving">
+      <div class="rs-result-icon" id="rsIcon"></div>
+      <div class="rs-result-main">
+        <div class="rs-result-time" id="rsTime">—</div>
+        <div class="rs-result-sub" id="rsSub"></div>
+      </div>
+      <div class="rs-result-dist" id="rsDist"></div>
+    </div>
+  </div>
+</div>
+
+<div class="route-chip" id="routeChip"></div>
+
+<div id="sidebar">
+  <button class="fab" id="pinBtn" title="Метка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+  </button>
+  <button class="fab" id="routeBtn" title="Маршрут">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </button>
+  <button class="fab" id="rulerBtn" title="Линейка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12"/><polyline points="6 8 2 12 6 16"/><polyline points="18 8 22 12 18 16"/></svg>
+  </button>
+  <button class="fab" id="menuBtn" title="Слои">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+  </button>
+  <button class="fab" id="locBtn" title="Местоположение">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 3" opacity=".4"/></svg>
+  </button>
+</div>
+
+<div id="mapMenu">
+  <span class="menu-title">Тип карты</span>
+  <div class="mbase-grid">
+    <button class="mbase-btn on" data-t="light">
+      <div class="mb-ico"><img src="https://tile.openstreetmap.org/6/32/21.png" alt=""></div>Обычная
+    </button>
+    <button class="mbase-btn" data-t="dark">
+      <div class="mb-ico"><img src="https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/6/32/21.png" alt=""></div>Тёмная
+    </button>
+    <button class="mbase-btn" data-t="sat">
+      <div class="mb-ico"><img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt=""></div>Спутник
+    </button>
+    <button class="mbase-btn" data-t="hyb">
+      <div class="mb-ico" style="position:relative">
+        <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <img src="https://cartodb-basemaps-a.global.ssl.fastly.net/light_only_labels/6/32/21.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85">
+      </div>Гибрид
+    </button>
+  </div>
+  <div class="menu-sep"></div>
+  <span class="menu-title">Слои</span>
+  <button class="mlay" id="layTraffic">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">Пробки</div><div class="mlay-sub">TomTom Flow</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+  <button class="mlay" id="layWeather">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">Погода</div><div class="mlay-sub">Осадки (OpenMeteo)</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+  <button class="mlay" id="layBike">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">Велодорожки</div><div class="mlay-sub">CyclOSM</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+  <button class="mlay" id="layTerrain">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-12 4 7 3-5 5 10"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">Рельеф</div><div class="mlay-sub">Горы и высоты</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+  <button class="mlay" id="layRail">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16"/><path d="M8 3v8M16 3v8"/><path d="M8 17l-2 4M16 17l2 4"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">ЖД пути</div><div class="mlay-sub">OpenRailwayMap</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+  <button class="mlay" id="layHike">
+    <div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M6.5 18c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M3 20h18"/></svg></div>
+    <div class="mlay-info"><div class="mlay-name">Пешие тропы</div><div class="mlay-sub">Waymarked Trails</div></div>
+    <div class="mlay-toggle"></div>
+  </button>
+</div>
+
+<div id="rulerHint">
+  <span class="hint-text" id="rulerHintText">Кликните на карту, чтобы начать</span>
+  <span class="dist-val" id="rulerDist" style="display:none"></span>
+  <button id="rulerClearBtn">✕ Сбросить</button>
+</div>
+
+<div id="pinDialogOverlay"></div>
+<div id="pinDialog">
+  <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Новая метка</h3>
+  <input id="pinLabelInput" type="text" placeholder="Название места..." maxlength="40" autocomplete="off">
+  <div class="pin-dialog-btns">
+    <button id="pinCancelBtn">Отмена</button>
+    <button id="pinConfirmBtn">Добавить</button>
+  </div>
+</div>
+<div id="wikiOverlay"></div>
+<div id="wikiPanel">
+  <div class="wiki-handle"></div>
+  <div class="wiki-header">
+    <div class="wiki-logo">W</div>
+    <div class="wiki-header-text">
+      <div class="wiki-title" id="wikiTitle">Wikipedia</div>
+      <div class="wiki-dist" id="wikiDist"></div>
+    </div>
+    <button id="wikiClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="wiki-body" id="wikiBody"></div>
+</div>
+<div id="credit">Made by <a href="https://t.me/revos9" target="_blank">@revos9</a></div>
+<div id="toast"></div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map',{zoomControl:false}).setView([20,0],2);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+
+const menuBtn=document.getElementById('menuBtn'),mapMenu=document.getElementById('mapMenu');
+menuBtn.addEventListener('click',e=>{e.stopPropagation();const o=mapMenu.classList.toggle('open');menuBtn.classList.toggle('open',o);});
+document.addEventListener('click',e=>{if(!menuBtn.contains(e.target)&&!mapMenu.contains(e.target)){mapMenu.classList.remove('open');menuBtn.classList.remove('open');}});
+
+const TL_BASE={
+  light:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
+  dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}),
+  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
+  hyb:L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{opacity:.85})])
+};
+const TL_OV={
+  traffic:L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',{opacity:.5,attribution:'© OpenStreetMap France',maxZoom:20,subdomains:'abc'}),
+  weather:L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02',{opacity:.65,attribution:'© OpenWeatherMap',maxZoom:18}),
+  bike:L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',{opacity:.85,attribution:'© CyclOSM',maxZoom:17,subdomains:'abc'}),
+  terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{opacity:.45,attribution:'© OpenTopoMap',maxZoom:17,subdomains:'abc'}),
+  rail:L.tileLayer('https://a.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',{opacity:.9,attribution:'© OpenRailwayMap',maxZoom:19}),
+  hike:L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',{opacity:.85,attribution:'© Waymarked Trails',maxZoom:19})
+};
+let curTheme='light'; TL_BASE.light.addTo(map);
+const activeOV=new Set();
+document.querySelectorAll('.mbase-btn').forEach(btn=>{btn.addEventListener('click',()=>{const t=btn.dataset.t;if(t===curTheme)return;const old=TL_BASE[curTheme];if(old instanceof L.LayerGroup)old.eachLayer(l=>map.removeLayer(l));else map.removeLayer(old);TL_BASE[t].addTo(map);activeOV.forEach(id=>{if(TL_OV[id]&&map.hasLayer(TL_OV[id])){map.removeLayer(TL_OV[id]);TL_OV[id].addTo(map);}});if(locM)locM.addTo(map);if(accC)accC.addTo(map);document.querySelectorAll('.mbase-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');curTheme=t;});});
+const OV_MAP={'layTraffic':'traffic','layWeather':'weather','layBike':'bike','layTerrain':'terrain','layRail':'rail','layHike':'hike'};
+Object.entries(OV_MAP).forEach(([btnId,ovId])=>{const btn=document.getElementById(btnId);if(!btn)return;btn.addEventListener('click',e=>{e.stopPropagation();const on=btn.classList.toggle('on');if(on){TL_OV[ovId].addTo(map);activeOV.add(ovId);toast(btn.querySelector('.mlay-name').textContent+' включён','ok');}else{map.removeLayer(TL_OV[ovId]);activeOV.delete(ovId);toast(btn.querySelector('.mlay-name').textContent+' выключен');}});});
+
+let toastT;
+function toast(txt,cls){const el=document.getElementById('toast');el.textContent=txt;el.className='show'+(cls?' '+cls:'');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2600);}
+
+let locM=null,accC=null;
+function locate(){if(!navigator.geolocation){toast('Геолокация не поддерживается','err');return;}const btn=document.getElementById('locBtn');btn.classList.add('active');navigator.geolocation.getCurrentPosition(pos=>{btn.classList.remove('active');const{latitude:lat,longitude:lng,accuracy:acc}=pos.coords;map.setView([lat,lng],16,{animate:true});if(locM)map.removeLayer(locM);if(accC)map.removeLayer(accC);accC=L.circle([lat,lng],{radius:acc,color:'#4285f4',weight:1.5,opacity:.35,fillColor:'#4285f4',fillOpacity:.06}).addTo(map);locM=L.marker([lat,lng],{icon:L.divIcon({className:'udot',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map).bindPopup('<b>Ты здесь</b><br><small style="color:#9aa0a6">Точность: '+Math.round(acc)+' м</small>');toast('Точность: '+Math.round(acc)+' м','ok');},err=>{document.getElementById('locBtn').classList.remove('active');toast(err.code===1?'Нужен доступ к геолокации':'Ошибка геолокации','err');},{enableHighAccuracy:true,timeout:10000});}
+document.getElementById('locBtn').addEventListener('click',locate);
+document.getElementById('shareBtn').addEventListener('click',()=>{const c=map.getCenter();const url=`${location.origin}${location.pathname}#${c.lat.toFixed(5)},${c.lng.toFixed(5)},${map.getZoom()}`;navigator.clipboard.writeText(url).then(()=>toast('Ссылка скопирована','ok')).catch(()=>toast('Ошибка копирования','err'));});
+(function(){const h=location.hash.slice(1).split(',');if(h.length===3&&!isNaN(h[0]))map.setView([+h[0],+h[1]],+h[2]);})();
+
+// ROUTING
+const routeBtn=document.getElementById('routeBtn'),routeSheet=document.getElementById('routeSheet'),rsClose=document.getElementById('routeSheetClose'),rsStartLbl=document.getElementById('rsStartLbl'),rsEndLbl=document.getElementById('rsEndLbl'),rsStartClr=document.getElementById('rsStartClr'),rsEndClr=document.getElementById('rsEndClr'),rsResult=document.getElementById('rsResult'),rsIcon=document.getElementById('rsIcon'),rsTime=document.getElementById('rsTime'),rsSub=document.getElementById('rsSub'),rsDist=document.getElementById('rsDist'),routeChip=document.getElementById('routeChip'),sidebar=document.getElementById('sidebar');
+let routeActive=false,routeStep=null,rStart=null,rEnd=null,rStartM=null,rEndM=null,rPolylines={},rMode='driving',rAborts={},rData={};
+const OSRM={driving:'car',cycling:'bike',walking:'foot'};
+const RICONS={driving:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,cycling:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`,walking:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg>`};
+const RNAMES={driving:'На машине',cycling:'На велосипеде',walking:'Пешком'};
+function fmtT(s){const m=Math.round(s/60);if(m<1)return'<1м';if(m<60)return m+'мин';const h=Math.floor(m/60),r=m%60;return r>0?`${h}ч ${r}м`:`${h}ч`;}
+function fmtD(m){if(m<1000)return Math.round(m)+' м';if(m<10000)return(m/1000).toFixed(1)+' км';return Math.round(m/1000)+' км';}
+function liftSidebar(yes){sidebar.classList.toggle('lifted',yes);mapMenu.classList.toggle('lifted',yes);}
+function showChip(step){routeChip.classList.remove('show','step-start','step-end');if(!step)return;const _pinSvg=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;const _flagSvg=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;routeChip.innerHTML=(step==='start'?_pinSvg+' Кликните — начало маршрута':_flagSvg+' Кликните — конец маршрута');routeChip.className=`route-chip show step-${step}`;clearTimeout(routeChip._t);routeChip._t=setTimeout(()=>routeChip.classList.remove('show'),4000);}
+function openSheet(){routeActive=true;routeBtn.classList.add('on');routeSheet.classList.add('show');liftSidebar(true);document.body.classList.add('route-mode');if(!rStart&&locM){setPoint('start',locM.getLatLng(),'Моё местоположение');}else if(!rStart){routeStep='start';showChip('start');}else if(!rEnd){routeStep='end';showChip('end');}}
+function closeSheet(){routeActive=false;routeBtn.classList.remove('on');routeSheet.classList.remove('show');liftSidebar(false);document.body.classList.remove('route-mode');clearAll();routeStep=null;showChip(null);}
+function clearAll(){if(rStartM){map.removeLayer(rStartM);rStartM=null;}if(rEndM){map.removeLayer(rEndM);rEndM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rStart=rEnd=null;rData={};rsStartLbl.textContent='Откуда...';rsStartLbl.classList.remove('filled');rsStartClr.classList.remove('vis');rsEndLbl.textContent='Куда...';rsEndLbl.classList.remove('filled');rsEndClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});}
+function setPoint(which,latlng,name){const lbl=name||`${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;if(which==='start'){rStart=latlng;rsStartLbl.textContent=lbl;rsStartLbl.classList.add('filled');rsStartClr.classList.add('vis');if(rStartM)map.removeLayer(rStartM);rStartM=L.marker(latlng,{icon:L.divIcon({className:'rm-start',iconSize:[16,16],iconAnchor:[8,8]}),draggable:true,zIndexOffset:700}).addTo(map);rStartM.on('dragend',e=>{rStart=e.target.getLatLng();rsStartLbl.textContent=`${rStart.lat.toFixed(4)}, ${rStart.lng.toFixed(4)}`;if(rEnd)fetchAll();});if(!rEnd){routeStep='end';showChip('end');}}else{rEnd=latlng;rsEndLbl.textContent=lbl;rsEndLbl.classList.add('filled');rsEndClr.classList.add('vis');if(rEndM)map.removeLayer(rEndM);rEndM=L.marker(latlng,{icon:L.divIcon({className:'rm-end',iconSize:[16,16],iconAnchor:[8,8]}),draggable:true,zIndexOffset:700}).addTo(map);rEndM.on('dragend',e=>{rEnd=e.target.getLatLng();rsEndLbl.textContent=`${rEnd.lat.toFixed(4)}, ${rEnd.lng.toFixed(4)}`;fetchAll();});routeStep=null;showChip(null);}if(rStart&&rEnd)fetchAll();}
+async function fetchAll(){if(!rStart||!rEnd)return;Object.values(rAborts).forEach(a=>a&&a.abort());rAborts={};Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rData={};rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='…';el.classList.add('loading');}});
+const OSRM_URLS={
+  driving:`https://routing.openstreetmap.de/routed-car/route/v1/driving/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`,
+  cycling:`https://routing.openstreetmap.de/routed-bike/route/v1/cycling/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`,
+  walking:`https://routing.openstreetmap.de/routed-foot/route/v1/walking/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`
+};
+const modes=['driving','cycling','walking'];
+for(const mode of modes){
+  const ctrl=new AbortController();rAborts[mode]=ctrl;
+  try{
+    const res=await fetch(OSRM_URLS[mode],{signal:ctrl.signal});
+    const data=await res.json();
+    if(data.routes&&data.routes.length){
+      const r=data.routes[0];
+      rData[mode]={duration:r.duration,distance:r.distance,coords:r.geometry.coordinates.map(c=>[c[1],c[0]])};
+      const el=document.getElementById('tt-'+mode);
+      if(el){el.textContent=fmtT(r.duration);el.classList.remove('loading');}
+    }else{
+      const el=document.getElementById('tt-'+mode);if(el){el.textContent='—';el.classList.remove('loading');}
+    }
+  }catch(e){
+    if(e.name!=='AbortError'){const el=document.getElementById('tt-'+mode);if(el){el.textContent='—';el.classList.remove('loading');}}
+  }
+  await new Promise(r=>setTimeout(r,300));
+}
+showMode(rMode);const bounds=L.latLngBounds([rStart,rEnd]).pad(0.2);map.fitBounds(bounds,{animate:true,duration:.6,paddingBottomRight:[0,240]});}
+function showMode(mode){Object.entries(rPolylines).forEach(([m,p])=>{if(p)p.setStyle({opacity:m===mode?.85:0,weight:m===mode?5:3});});const d=rData[mode];if(!d){rsResult.dataset.mode=mode;rsResult.classList.add('show');rsIcon.innerHTML=RICONS[mode];rsTime.textContent='Нет данных';rsSub.textContent=RNAMES[mode];rsDist.textContent='';return;}if(!rPolylines[mode]){rPolylines[mode]=L.polyline(d.coords,{color:'#4285f4',weight:5,opacity:.85,lineJoin:'round',lineCap:'round'}).addTo(map);rPolylines[mode].bringToBack();}else{rPolylines[mode].setStyle({opacity:.85,weight:5});if(!map.hasLayer(rPolylines[mode]))rPolylines[mode].addTo(map);}rsResult.dataset.mode=mode;rsResult.classList.add('show');rsIcon.innerHTML=RICONS[mode];rsTime.textContent=fmtT(d.duration);rsSub.textContent=RNAMES[mode];rsDist.textContent=fmtD(d.distance);}
+document.querySelectorAll('.rs-tab').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('.rs-tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');rMode=btn.dataset.mode;showMode(rMode);});});
+rsStartClr.addEventListener('click',e=>{e.stopPropagation();if(rStartM){map.removeLayer(rStartM);rStartM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rStart=null;rData={};rsStartLbl.textContent='Откуда...';rsStartLbl.classList.remove('filled');rsStartClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});routeStep='start';showChip('start');});
+rsEndClr.addEventListener('click',e=>{e.stopPropagation();if(rEndM){map.removeLayer(rEndM);rEndM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rEnd=null;rData={};rsEndLbl.textContent='Куда...';rsEndLbl.classList.remove('filled');rsEndClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});routeStep='end';showChip('end');});
+routeBtn.addEventListener('click',()=>routeActive?closeSheet():openSheet());
+rsClose.addEventListener('click',closeSheet);
+
+map.on('click',async e=>{if(rulerActive){addRulerPoint(e.latlng);return;}if(routeActive&&routeStep){const step=routeStep;setPoint(step,e.latlng);try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&format=json&accept-language=ru`);const d=await r.json();if(d.display_name){const lbl=d.display_name.split(', ').slice(0,2).join(', ');if(step==='start'){rsStartLbl.textContent=lbl;}else{rsEndLbl.textContent=lbl;}}}catch{}return;}if(pinMode){openPinDialog(e.latlng);return;}fetchWiki(e.latlng);});
+
+// RULER
+const rulerBtn=document.getElementById('rulerBtn'),rulerHint=document.getElementById('rulerHint'),rulerHintText=document.getElementById('rulerHintText'),rulerDistEl=document.getElementById('rulerDist'),rulerClearBtn=document.getElementById('rulerClearBtn');
+let rulerActive=false,rulerPoints=[],rulerLines=[],rulerLabels=[],rulerPolygon=null,isClosed=false;
+function fmtR(m){return m<1000?Math.round(m)+' м':m<10000?(m/1000).toFixed(2)+' км':Math.round(m/1000)+' км';}
+function fmtA(m2){return m2<10000?Math.round(m2)+' м²':m2<1e6?(m2/10000).toFixed(2)+' га':(m2/1e6).toFixed(2)+' км²';}
+function calcArea(pts){if(pts.length<3)return 0;const R=6371000;let a=0;const n=pts.length;for(let i=0;i<n;i++){const j=(i+1)%n;const la1=pts[i].lat*Math.PI/180,la2=pts[j].lat*Math.PI/180;const dl=(pts[j].lng-pts[i].lng)*Math.PI/180;a+=dl*(2+Math.sin(la1)+Math.sin(la2));}return Math.abs(a*R*R/2);}
+function totalP(){let d=0;for(let i=1;i<rulerPoints.length;i++)d+=rulerPoints[i-1].latlng.distanceTo(rulerPoints[i].latlng);if(isClosed&&rulerPoints.length>2)d+=rulerPoints[rulerPoints.length-1].latlng.distanceTo(rulerPoints[0].latlng);return d;}
+const rSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7ab3f8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="11" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="11" x2="14" y2="13"/><line x1="18" y1="10" x2="18" y2="14"/></svg>';
+const aSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7ab3f8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polygon points="12 2 22 19 2 19"/></svg>';
+function updateRulerUI(){const n=rulerPoints.length;if(n===0){rulerHintText.style.display='';rulerHintText.textContent='Кликните на карту, чтобы начать';rulerDistEl.style.display='none';}else if(n===1){rulerHintText.style.display='';rulerHintText.textContent='Добавьте ещё точку';rulerDistEl.style.display='none';}else if(!isClosed){rulerHintText.style.display='';rulerHintText.textContent=n>=3?'Замкнуть':'';rulerDistEl.style.display='';rulerDistEl.innerHTML=rSvg+' '+fmtR(totalP());}else{rulerHintText.style.display='none';rulerDistEl.style.display='';const area=calcArea(rulerPoints.map(p=>p.latlng));rulerDistEl.innerHTML=rSvg+' '+fmtR(totalP())+'<span style="opacity:.35;margin:0 4px">|</span>'+aSvg+' '+fmtA(area);}}
+function redrawRuler(){rulerLines.forEach(l=>map.removeLayer(l));rulerLabels.forEach(l=>map.removeLayer(l));if(rulerPolygon){map.removeLayer(rulerPolygon);rulerPolygon=null;}rulerLines=[];rulerLabels=[];const pts=rulerPoints.map(p=>p.latlng);if(isClosed&&pts.length>=3){rulerPolygon=L.polygon(pts,{color:'#4285f4',weight:2.5,opacity:.85,dashArray:'6 5',fillColor:'#4285f4',fillOpacity:.1}).addTo(map);}else{for(let i=1;i<rulerPoints.length;i++){const a=pts[i-1],b=pts[i];rulerLines.push(L.polyline([a,b],{color:'#4285f4',weight:3,opacity:.85,dashArray:'6 5'}).addTo(map));const mid=L.latLng((a.lat+b.lat)/2,(a.lng+b.lng)/2);rulerLabels.push(L.marker(mid,{icon:L.divIcon({className:'ruler-label',html:fmtR(a.distanceTo(b)),iconSize:null,iconAnchor:[0,24]}),interactive:false}).addTo(map));}}updateRulerUI();}
+function isNearFirst(ll){if(rulerPoints.length<3)return false;const p1=map.latLngToContainerPoint(rulerPoints[0].latlng),p2=map.latLngToContainerPoint(ll);return p1.distanceTo(p2)<20;}
+function addRulerPoint(ll){if(isClosed)return;if(isNearFirst(ll)){isClosed=true;rulerPoints[0].marker.getElement().style.boxShadow='0 0 0 4px rgba(66,133,244,.35)';redrawRuler();return;}const idx=rulerPoints.length;const marker=L.marker(ll,{icon:L.divIcon({className:'ruler-dot',iconSize:[14,14],iconAnchor:[7,7]}),draggable:true,zIndexOffset:500}).addTo(map);rulerPoints.push({latlng:ll,marker});marker.on('drag',e=>{rulerPoints[idx].latlng=e.target.getLatLng();redrawRuler();});marker.on('dblclick',e=>{L.DomEvent.stopPropagation(e);if(isClosed)return;map.removeLayer(marker);rulerPoints.splice(idx,1);rulerPoints.forEach((p,i)=>p.marker.off('drag').on('drag',ev=>{rulerPoints[i].latlng=ev.target.getLatLng();redrawRuler();}));redrawRuler();});if(rulerPoints.length>=3){const el=rulerPoints[0].marker.getElement();if(el)el.style.outline='2.5px dashed rgba(66,133,244,.7)';}redrawRuler();}
+function clearRuler(){rulerPoints.forEach(p=>map.removeLayer(p.marker));rulerLines.forEach(l=>map.removeLayer(l));rulerLabels.forEach(l=>map.removeLayer(l));if(rulerPolygon){map.removeLayer(rulerPolygon);rulerPolygon=null;}rulerPoints=[];rulerLines=[];rulerLabels=[];isClosed=false;updateRulerUI();}
+function toggleRuler(){rulerActive=!rulerActive;rulerBtn.classList.toggle('on',rulerActive);document.body.classList.toggle('ruler-mode',rulerActive);rulerHint.classList.toggle('show',rulerActive);if(!rulerActive)clearRuler();else updateRulerUI();}
+rulerBtn.addEventListener('click',toggleRuler);
+rulerClearBtn.addEventListener('click',e=>{e.stopPropagation();clearRuler();});
+
+// PINS
+const pinBtn=document.getElementById('pinBtn'),pinDialog=document.getElementById('pinDialog'),pinDialogOverlay=document.getElementById('pinDialogOverlay'),pinLabelInput=document.getElementById('pinLabelInput'),pinConfirmBtn=document.getElementById('pinConfirmBtn'),pinCancelBtn=document.getElementById('pinCancelBtn');
+let pinMode=false,pendingPin=null,pins=[];
+function togglePinMode(){pinMode=!pinMode;pinBtn.classList.toggle('on',pinMode);document.body.classList.toggle('pin-mode',pinMode);if(pinMode)toast('Кликните на карту, чтобы поставить метку');}
+pinBtn.addEventListener('click',togglePinMode);
+function openPinDialog(ll){pendingPin=ll;pinLabelInput.value='';pinDialog.classList.add('show');pinDialogOverlay.classList.add('show');setTimeout(()=>pinLabelInput.focus(),200);}
+function closePinDialog(){pinDialog.classList.remove('show');pinDialogOverlay.classList.remove('show');pendingPin=null;}
+function confirmPin(){const label=pinLabelInput.value.trim()||'Метка';if(!pendingPin)return;addPin(pendingPin,label);closePinDialog();}
+pinConfirmBtn.addEventListener('click',confirmPin);pinCancelBtn.addEventListener('click',closePinDialog);pinDialogOverlay.addEventListener('click',closePinDialog);
+pinLabelInput.addEventListener('keydown',e=>{if(e.key==='Enter')confirmPin();if(e.key==='Escape')closePinDialog();});
+function addPin(latlng,label){const ih=`<div class="custom-pin"><div class="pin-head"><svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="rgba(255,255,255,0.4)"/></svg></div><div class="pin-tail"></div></div>`;const marker=L.marker(latlng,{icon:L.divIcon({html:ih,className:'',iconSize:[28,38],iconAnchor:[14,38]}),zIndexOffset:800}).addTo(map);const ph=`<div class="pin-popup"><div class="pin-popup-name">${label}</div><button class="pin-popup-del" onclick="removePin(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg> Удалить</button></div>`;marker.bindPopup(ph,{maxWidth:200,minWidth:140}).openPopup();const obj={latlng,label,marker};pins.push(obj);marker._pinRef=obj;}
+window.removePin=function(){const m=pins.find(p=>p.marker.isPopupOpen());if(m){map.removeLayer(m.marker);pins=pins.filter(p=>p!==m);}};
+
+// SEARCH
+const searchInput=document.getElementById('searchInput'),suggestions=document.getElementById('suggestions');
+let sugTimer,sugResults=[];
+const HIST_KEY='geogo_history',MAX_HIST=8;
+function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch{return[];}}
+function saveHistory(h){try{localStorage.setItem(HIST_KEY,JSON.stringify(h));}catch{}}
+function addToHistory(item){let h=loadHistory();h=h.filter(x=>x.name!==item.name);h.unshift(item);if(h.length>MAX_HIST)h=h.slice(0,MAX_HIST);saveHistory(h);}
+function removeFromHistory(name){saveHistory(loadHistory().filter(h=>h.name!==name));}
+
+const pinIco=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+const histIco=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+const delIco=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+
+function goTo(lat,lon,name,sub,sv=true){map.setView([+lat,+lon],13,{animate:true});searchInput.value=name;suggestions.classList.remove('open');if(sv)addToHistory({name,sub,lat,lon});}
+
+function buildHistRows(hist){
+  return hist.map((h,i)=>
+    `<div class="hist-row">
+      <button class="hist-btn" data-hi="${i}">
+        <span style="opacity:.45;flex-shrink:0">${histIco}</span>
+        <div style="min-width:0;flex:1;overflow:hidden">
+          <div class="sug-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.name}</div>
+          ${h.sub?`<div class="sug-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.sub}</div>`:''}
+        </div>
+      </button>
+      <button class="sug-del" data-del="${i}" title="Удалить из истории">${delIco}</button>
+    </div>`
+  ).join('');
+}
+function bindHistEvents(container, onClearAll){
+  container.querySelectorAll('.hist-btn').forEach(b=>b.addEventListener('click',e=>{
+    const h=loadHistory()[+b.dataset.hi];
+    if(h)goTo(h.lat,h.lon,h.name,h.sub,false);
+  }));
+  container.querySelectorAll('.sug-del').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    const h=loadHistory()[+b.dataset.del];
+    if(h){removeFromHistory(h.name); onClearAll();}
+  }));
+  const clrBtn=container.querySelector('.hist-clear-all');
+  if(clrBtn) clrBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    saveHistory([]);
+    suggestions.classList.remove('open');
+    toast('История очищена');
+  });
+}
+function renderHistory(){
+  const hist=loadHistory();
+  if(!hist.length){suggestions.classList.remove('open');return;}
+  suggestions.innerHTML=
+    `<div class="sug-sep-row"><span class="sug-sep">История</span><button class="hist-clear-all">Очистить всё</button></div>`
+    +buildHistRows(hist);
+  suggestions.classList.add('open');
+  bindHistEvents(suggestions, renderHistory);
+}
+
+function renderSuggestions(items){
+  const hist=loadHistory();
+  if(!items.length&&!hist.length){suggestions.classList.remove('open');return;}
+  let html='';
+  if(items.length) html+=`<span class="sug-sep">Результаты</span>`+items.map((it,i)=>{
+    const p=it.display_name.split(', ');
+    return`<button class="sug-item" data-i="${i}"><span style="opacity:.45;flex-shrink:0">${pinIco}</span><div><div class="sug-name">${p[0]}</div><div class="sug-sub">${p.slice(1,3).join(', ')}</div></div></button>`;
+  }).join('');
+  if(hist.length) html+=
+    `<div class="sug-sep-row"><span class="sug-sep">История</span><button class="hist-clear-all">Очистить всё</button></div>`
+    +buildHistRows(hist);
+  suggestions.innerHTML=html;
+  suggestions.classList.add('open');
+  suggestions.querySelectorAll('.sug-item[data-i]').forEach(b=>b.addEventListener('click',()=>{
+    const it=sugResults[+b.dataset.i];
+    const p=it.display_name.split(', ');
+    goTo(it.lat,it.lon,p[0],p.slice(1,3).join(', '));
+  }));
+  bindHistEvents(suggestions, ()=>renderSuggestions(sugResults));
+}
+
+searchInput.addEventListener('focus',()=>{if(!searchInput.value.trim())renderHistory();});
+searchInput.addEventListener('input',()=>{clearTimeout(sugTimer);const q=searchInput.value.trim();if(!q){renderHistory();return;}if(q.length<2){suggestions.classList.remove('open');return;}sugTimer=setTimeout(()=>fetchSug(q),280);});
+async function fetchSug(q){try{const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5&accept-language=ru');sugResults=await r.json();renderSuggestions(sugResults);}catch(e){}}
+document.addEventListener('click',e=>{if(!searchInput.closest('#searchWrap').contains(e.target))suggestions.classList.remove('open');});
+searchInput.addEventListener('keydown',e=>{if(e.key==='Enter'){suggestions.classList.remove('open');if(sugResults.length){const it=sugResults[0];const p=it.display_name.split(', ');goTo(it.lat,it.lon,p[0],p.slice(1,3).join(', '));}searchInput.blur();}if(e.key==='Escape'){suggestions.classList.remove('open');searchInput.blur();}});
+
+// ── WIKIPEDIA ──
+const wikiPanel=document.getElementById('wikiPanel'),wikiOverlay=document.getElementById('wikiOverlay'),wikiClose=document.getElementById('wikiClose'),wikiTitle=document.getElementById('wikiTitle'),wikiDist=document.getElementById('wikiDist'),wikiBody=document.getElementById('wikiBody');
+let wikiMarker=null;
+
+function openWiki(){wikiPanel.classList.add('show');wikiOverlay.classList.add('show');}
+function closeWiki(){wikiPanel.classList.remove('show');wikiOverlay.classList.remove('show');if(wikiMarker){map.removeLayer(wikiMarker);wikiMarker=null;}}
+wikiClose.addEventListener('click',closeWiki);
+wikiOverlay.addEventListener('click',closeWiki);
+
+function fmtWikiDist(m){if(m<1000)return Math.round(m)+' м от клика';return(m/1000).toFixed(1)+' км от клика';}
+
+async function fetchWiki(latlng){
+  wikiTitle.textContent='Поиск...';
+  wikiDist.textContent='';
+  wikiBody.innerHTML=`<div class="wiki-loading"><div class="wiki-spinner"></div>Ищем статью рядом...</div>`;
+  openWiki();
+  try{
+    const geoUrl=`https://ru.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${latlng.lat}|${latlng.lng}&gsradius=10000&gslimit=1&format=json&origin=*`;
+    const geoRes=await fetch(geoUrl);
+    const geoData=await geoRes.json();
+    const places=geoData?.query?.geosearch;
+    if(!places||!places.length){
+      const geoUrlEn=`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${latlng.lat}|${latlng.lng}&gsradius=10000&gslimit=1&format=json&origin=*`;
+      const geoResEn=await fetch(geoUrlEn);
+      const geoDataEn=await geoResEn.json();
+      const placesEn=geoDataEn?.query?.geosearch;
+      if(!placesEn||!placesEn.length){
+        wikiBody.innerHTML=`<div class="wiki-none"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><br>Статей Википедии рядом не найдено</div>`;
+        wikiTitle.textContent='Ничего не найдено';
+        return;
+      }
+      await showWikiArticle(placesEn[0],'en',latlng);
+      return;
+    }
+    await showWikiArticle(places[0],'ru',latlng);
+  }catch(err){
+    wikiBody.innerHTML=`<div class="wiki-none">Ошибка загрузки статьи</div>`;
+  }
+}
+
+async function showWikiArticle(place,lang,clickLatlng){
+  const pageId=place.pageid;
+  const dist=L.latLng(place.lat,place.lon).distanceTo(clickLatlng);
+  const wikiBase=`https://${lang}.wikipedia.org`;
+  const summaryUrl=`${wikiBase}/w/api.php?action=query&pageids=${pageId}&prop=extracts|pageimages|info&exintro=1&explaintext=1&exchars=800&piprop=thumbnail&pithumbsize=600&inprop=url&format=json&origin=*`;
+  const sumRes=await fetch(summaryUrl);
+  const sumData=await sumRes.json();
+  const page=sumData.query.pages[pageId];
+  wikiTitle.textContent=page.title;
+  wikiDist.textContent=fmtWikiDist(dist);
+  if(wikiMarker)map.removeLayer(wikiMarker);
+  wikiMarker=L.circleMarker([place.lat,place.lon],{radius:8,color:'#4285f4',weight:2.5,fillColor:'#4285f4',fillOpacity:.25}).addTo(map);
+  const thumb=page.thumbnail?.source;
+  const extract=page.extract||'Нет описания.';
+  const articleUrl=page.fullurl||`${wikiBase}/wiki/${encodeURIComponent(page.title)}`;
+  wikiBody.innerHTML=
+    (thumb?`<img class="wiki-thumb" src="${thumb}" alt="${page.title}" loading="lazy">`:'')
+    +`<div class="wiki-extract">${extract.replace(/\n/g,'<br><br>')}</div>`
+    +`<button class="wiki-readmore" onclick="window.open('${articleUrl}','_blank')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Читать на Википедии
+      </button>`;
+}
+
+setTimeout(locate,600);
+</script>
+</body>
+</html>
