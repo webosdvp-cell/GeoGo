@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoGo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+#map { height:100vh; width:100vw; }
+
+#topbar {
+  position:fixed; top:0; left:0; right:0; z-index:1000;
+  padding:12px 16px; display:flex; align-items:center; gap:10px;
+  background:rgba(255,255,255,0.92); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(0,0,0,0.08); box-shadow:0 2px 16px rgba(0,0,0,0.1);
+}
+#searchWrap {
+  flex:1; display:flex; align-items:center; position:relative;
+  background:#f1f3f4; border-radius:24px; padding:0 16px; gap:8px; height:42px; transition:background .2s;
+}
+#searchWrap:focus-within { background:#fff; box-shadow:0 0 0 2px #4285f4; }
+#searchWrap > svg { flex-shrink:0; opacity:.45; }
+#searchInput { flex:1; border:none; outline:none; background:transparent; font-size:15px; color:#202124; }
+#searchInput::placeholder { color:#9aa0a6; }
+#suggestions {
+  position:absolute; top:calc(100% + 6px); left:0; right:0;
+  background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  overflow:hidden; z-index:1200; display:none;
+}
+#suggestions.open { display:block; }
+.sug-item { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; font-size:14px; color:#3c4043; transition:background .12s; border:none; background:none; width:100%; text-align:left; }
+.sug-item:hover { background:#f1f3f4; }
+.sug-name { font-weight:500; }
+.sug-sub { font-size:12px; color:#9aa0a6; margin-top:1px; }
+.sug-sep { font-size:11px; font-weight:600; letter-spacing:.7px; color:#9aa0a6; text-transform:uppercase; padding:8px 16px 4px; display:block; }
+.sug-del { width:24px; height:24px; border-radius:50%; border:none; background:none; color:#c5c8cc; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-left:auto; padding:0; transition:background .15s,color .15s; position:relative; z-index:10; }
+.sug-del:hover { background:#fee8e8; color:#d93025; }
+.hist-row { display:flex; align-items:center; gap:10px; padding:0 16px; transition:background .12s; }
+.hist-row:hover { background:#f1f3f4; }
+.hist-row:hover .sug-del { color:#9aa0a6; }
+.hist-btn { flex:1; display:flex; align-items:center; gap:10px; padding:10px 0; cursor:pointer; border:none; background:none; text-align:left; font-size:14px; color:#3c4043; min-width:0; }
+.sug-sep-row { display:flex; align-items:center; justify-content:space-between; padding:8px 16px 4px; }
+.sug-sep-row .sug-sep { padding:0; display:inline; }
+.hist-clear-all { border:none; background:none; color:#9aa0a6; font-size:11px; font-weight:600; cursor:pointer; padding:3px 6px; border-radius:8px; transition:background .15s,color .15s; letter-spacing:.2px; }
+.hist-clear-all:hover { background:#fee8e8; color:#d93025; }
+
+#shareBtn { width:42px; height:42px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; border:none; cursor:pointer; color:#5f6368; transition:all .18s; }
+#shareBtn:hover { background:#e8f0fe; color:#4285f4; }
+#shareBtn:active { transform:scale(.92); }
+
+/* ── GAMIFICATION FAB BADGE ─────────────────────────────────────────────────── */
+#xpBadge {
+  width:48px; height:48px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background:#fff; border:none; cursor:pointer; color:#5f6368;
+  box-shadow:0 2px 10px rgba(0,0,0,0.18);
+  transition:transform .18s,box-shadow .18s,background .18s,opacity .22s,scale .22s;
+  position:relative;
+}
+#xpBadge:hover { transform:scale(1.08); box-shadow:0 4px 18px rgba(0,0,0,0.22); background:#e8f0fe; }
+#xpBadge:active { transform:scale(.93); }
+.xp-avatar {
+  width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#4285f4,#1a73e8);
+  display:flex; align-items:center; justify-content:center;
+}
+.xp-avatar svg { color:#fff; }
+.xp-pip { display:none !important; }
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────────────────── */
+#sidebar {
+  position:fixed; right:16px; bottom:40px; z-index:1000;
+  display:flex; flex-direction:column; gap:10px; align-items:center;
+  transition:bottom .35s cubic-bezier(.4,0,.2,1);
+}
+#sidebar.lifted { bottom:230px; }
+
+.fab {
+  width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; border:none; position:relative;
+  box-shadow:0 2px 10px rgba(0,0,0,0.18);
+  transition:transform .18s, box-shadow .18s, background .18s, color .18s, opacity .22s cubic-bezier(.34,1.4,.64,1), scale .22s cubic-bezier(.34,1.4,.64,1);
+}
+.fab:hover { transform:scale(1.08); box-shadow:0 4px 18px rgba(0,0,0,0.22); }
+.fab:active { transform:scale(.93); }
+
+#rulerBtn,#routeBtn,#pinBtn,#menuBtn,#randomBtn { background:#fff; color:#5f6368; }
+#rulerBtn.on,#routeBtn.on,#pinBtn.on { background:#4285f4; color:#fff; box-shadow:0 2px 14px rgba(66,133,244,.5); }
+#menuBtn.open { background:#e8f0fe; color:#4285f4; }
+#randomBtn.spinning svg { animation:spinonce .45s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes spinonce { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+body.pin-mode #map { cursor:crosshair !important; }
+body.route-mode #map { cursor:crosshair !important; }
+
+/* ── LOCATION BUTTON (always visible) ─────────────────────────────────────── */
+#locBtn { background:#fff; color:#4285f4; }
+#locBtn.active { background:#4285f4; color:#fff; }
+#locBtn::after {
+  content:''; position:absolute; inset:-4px; border-radius:50%;
+  border:2px solid rgba(66,133,244,0.4);
+  animation:locping 2.2s ease-out infinite;
+}
+@keyframes locping { 0%{opacity:.6;transform:scale(1)} 100%{opacity:0;transform:scale(1.6)} }
+
+/* ── SIDEBAR TOGGLE BUTTON ─────────────────────────────────────────────────── */
+#sidebarToggle {
+  background:#fff;
+  color:#5f6368;
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
+}
+#sidebarToggle:hover { background:#f1f3f4; color:#4285f4; }
+#sidebarToggle.open {
+  background:#e8f0fe;
+  color:#4285f4;
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
+}
+
+/* ── HIDDEN FAB ITEMS (все кроме locBtn и sidebarToggle) ──────────────────── */
+#sidebar #xpBadge,
+#sidebar #pinBtn,
+#sidebar #routeBtn,
+#sidebar #rulerBtn,
+#sidebar #menuBtn,
+#sidebar #randomBtn {
+  opacity:0;
+  transform:scale(0.4) translateX(16px);
+  pointer-events:none;
+}
+
+#sidebar.menu-open #xpBadge,
+#sidebar.menu-open #pinBtn,
+#sidebar.menu-open #routeBtn,
+#sidebar.menu-open #rulerBtn,
+#sidebar.menu-open #menuBtn,
+#sidebar.menu-open #randomBtn {
+  opacity:1;
+  transform:scale(1) translateX(0);
+  pointer-events:all;
+}
+
+/* Каскадные задержки — чем выше кнопка, тем позже появляется */
+#sidebar.menu-open #xpBadge   { transition-delay:.00s; }
+#sidebar.menu-open #pinBtn    { transition-delay:.05s; }
+#sidebar.menu-open #routeBtn  { transition-delay:.10s; }
+#sidebar.menu-open #rulerBtn  { transition-delay:.15s; }
+#sidebar.menu-open #menuBtn   { transition-delay:.20s; }
+#sidebar.menu-open #randomBtn { transition-delay:.25s; }
+
+/* При скрытии — быстро без задержки */
+#sidebar #xpBadge,
+#sidebar #pinBtn,
+#sidebar #routeBtn,
+#sidebar #rulerBtn,
+#sidebar #menuBtn,
+#sidebar #randomBtn {
+  transition:opacity .15s ease, transform .15s ease, box-shadow .18s, background .18s, color .18s;
+}
+
+.custom-pin { display:flex; flex-direction:column; align-items:center; cursor:pointer; }
+.custom-pin .pin-head { width:28px; height:28px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; background:#4285f4; border:2.5px solid #fff; box-shadow:0 3px 10px rgba(66,133,244,.5); }
+.custom-pin .pin-head svg { transform:rotate(45deg); }
+.custom-pin .pin-tail { width:2px; height:8px; background:#4285f4; margin-top:-1px; border-radius:0 0 2px 2px; }
+
+#pinDialog { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.9); z-index:3000; background:#fff; border-radius:20px; box-shadow:0 16px 48px rgba(0,0,0,0.22); padding:20px; width:280px; opacity:0; pointer-events:none; transition:opacity .2s,transform .22s cubic-bezier(.34,1.4,.64,1); }
+#pinDialog.show { opacity:1; pointer-events:all; transform:translate(-50%,-50%) scale(1); }
+#pinDialogOverlay { position:fixed; inset:0; z-index:2999; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .2s; }
+#pinDialogOverlay.show { opacity:1; pointer-events:all; }
+#pinDialog h3 { font-size:16px; font-weight:600; color:#202124; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+#pinDialog h3 svg { color:#4285f4; }
+#pinLabelInput,#saveRouteNameInput { width:100%; border:1.5px solid #e0e0e0; border-radius:12px; padding:10px 14px; font-size:14px; color:#202124; outline:none; transition:border-color .18s; font-family:inherit; }
+#pinLabelInput:focus,#saveRouteNameInput:focus { border-color:#4285f4; }
+#pinLabelInput::placeholder,#saveRouteNameInput::placeholder { color:#9aa0a6; }
+.pin-dialog-btns,.srd-btns { display:flex; gap:8px; margin-top:14px; }
+.pin-dialog-btns button,.srd-btns button { flex:1; padding:10px; border-radius:12px; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; font-family:inherit; }
+#pinCancelBtn,#srdCancelBtn { background:#f1f3f4; color:#5f6368; }
+#pinConfirmBtn,#srdConfirmBtn { background:#4285f4; color:#fff; }
+.pin-popup { min-width:120px; }
+.pin-popup .pin-popup-name { font-weight:600; font-size:14px; color:#202124; margin-bottom:6px; }
+.pin-popup .pin-popup-del { display:flex; align-items:center; gap:5px; background:none; border:none; color:#4285f4; font-size:12px; font-weight:600; cursor:pointer; padding:0; font-family:inherit; }
+
+#mapMenu { position:fixed; right:68px; bottom:40px; z-index:999; background:rgba(255,255,255,0.97); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,0.18); padding:10px 8px 12px; display:flex; flex-direction:column; gap:0; width:220px; transform:scale(0.88) translateX(12px); transform-origin:right bottom; opacity:0; pointer-events:none; transition:transform .24s cubic-bezier(.34,1.56,.64,1),opacity .18s ease,bottom .35s cubic-bezier(.4,0,.2,1); max-height:82vh; overflow-y:auto; }
+#mapMenu.lifted { bottom:230px; }
+#mapMenu.open { transform:scale(1) translateX(0); opacity:1; pointer-events:all; }
+.menu-title { font-size:10px; font-weight:700; letter-spacing:.9px; color:#9aa0a6; text-transform:uppercase; padding:6px 12px 5px; display:block; }
+.menu-sep { height:1px; background:#f1f3f4; margin:5px 8px; }
+.mbase-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:0 6px 4px; }
+.mbase-btn { display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px 7px; border-radius:14px; cursor:pointer; border:1.5px solid #e8eaed; background:#fff; font-size:11px; font-weight:600; color:#5f6368; transition:all .18s; }
+.mbase-btn:hover { background:#f8f9fa; }
+.mbase-btn.on { border-color:#4285f4; background:#e8f0fe; color:#1a73e8; }
+.mbase-btn .mb-ico { width:42px; height:30px; border-radius:8px; overflow:hidden; flex-shrink:0; background:#e8eaed; }
+.mbase-btn .mb-ico img { width:100%; height:100%; object-fit:cover; }
+.mlay { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px; cursor:pointer; border:none; background:none; width:100%; text-align:left; transition:background .15s; }
+.mlay:hover { background:#f1f3f4; }
+.mlay-ico { width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; color:#5f6368; transition:background .2s,color .2s; }
+.mlay.on .mlay-ico { background:#e8f0fe; color:#4285f4; }
+.mlay-info { flex:1; }
+.mlay-name { font-size:13px; font-weight:600; color:#3c4043; }
+.mlay-sub { font-size:10px; color:#9aa0a6; }
+.mlay-toggle { width:32px; height:19px; border-radius:10px; background:#dde1e5; flex-shrink:0; position:relative; transition:background .2s; }
+.mlay-toggle::after { content:''; position:absolute; width:15px; height:15px; top:2px; left:2px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.2); transition:transform .2s; }
+.mlay.on .mlay-toggle { background:#4285f4; }
+.mlay.on .mlay-toggle::after { transform:translateX(13px); }
+
+body.ruler-mode #map { cursor:crosshair !important; }
+#rulerHint { position:fixed; top:76px; left:50%; transform:translateX(-50%) translateY(-6px); z-index:1500; background:rgba(32,33,36,0.93); color:#fff; padding:8px 8px 8px 16px; border-radius:20px; font-size:13px; font-weight:500; box-shadow:0 4px 24px rgba(0,0,0,0.3); display:none; align-items:center; gap:10px; white-space:nowrap; opacity:0; transition:opacity .2s,transform .22s; }
+#rulerHint.show { display:flex; opacity:1; transform:translateX(-50%) translateY(0); }
+#rulerHint .hint-text { opacity:.65; }
+#rulerHint .dist-val { color:#7ab3f8; font-size:16px; font-weight:700; display:inline-flex; align-items:center; gap:6px; }
+#rulerClearBtn { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.8); padding:6px 14px; border-radius:14px; cursor:pointer; font-size:12px; font-weight:600; transition:background .15s; line-height:1; }
+#rulerClearBtn:hover { background:rgba(255,255,255,0.22); color:#fff; }
+.ruler-dot { width:14px; height:14px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(66,133,244,.6); cursor:grab; }
+.ruler-dot:active { cursor:grabbing; }
+.ruler-label { background:rgba(32,33,36,0.88); color:#fff; padding:3px 9px; border-radius:8px; font-size:11px; font-weight:700; white-space:nowrap; pointer-events:none; transform:translateX(-50%); display:inline-block; }
+
+#routeSheet { position:fixed; left:0; right:0; bottom:0; z-index:1200; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -4px 40px rgba(0,0,0,0.15); transform:translateY(100%); transition:transform .35s cubic-bezier(.4,0,.2,1); }
+#routeSheet.show { transform:translateY(0); }
+.rs-handle { width:36px; height:4px; background:#e0e0e0; border-radius:2px; margin:12px auto 0; }
+.rs-body { padding:14px 16px 20px; }
+.rs-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:8px; }
+.rs-title { font-size:16px; font-weight:700; color:#202124; display:flex; align-items:center; gap:8px; flex:1; }
+.rs-title-dot { width:8px; height:8px; border-radius:50%; background:#4285f4; animation:pulse-blue 2s ease infinite; flex-shrink:0; }
+@keyframes pulse-blue { 0%,100%{box-shadow:0 0 0 0 rgba(66,133,244,.4)} 50%{box-shadow:0 0 0 6px rgba(66,133,244,0)} }
+#rsSaveBtn { display:flex; align-items:center; gap:5px; padding:6px 12px; border-radius:20px; border:1.5px solid #e8eaed; background:#fff; color:#5f6368; font-size:12px; font-weight:600; cursor:pointer; transition:all .18s; white-space:nowrap; font-family:inherit; flex-shrink:0; }
+#rsSaveBtn:hover { border-color:#4285f4; color:#4285f4; background:#e8f0fe; }
+#rsSaveBtn.saved { border-color:#4285f4; color:#4285f4; background:#e8f0fe; }
+#rsOpenSavedBtn { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; transition:background .15s,color .15s; flex-shrink:0; }
+#rsOpenSavedBtn:hover { background:#e8f0fe; color:#4285f4; }
+#routeSheetClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; transition:background .15s,color .15s; flex-shrink:0; }
+#routeSheetClose:hover { background:#e8f0fe; color:#4285f4; }
+
+.rs-inputs { background:#f8f9fa; border-radius:16px; overflow:hidden; border:1.5px solid #e8eaed; margin-bottom:14px; }
+.rs-field { display:flex; align-items:center; gap:12px; padding:13px 14px; min-height:50px; }
+.rs-field + .rs-field { border-top:1px solid #e8eaed; }
+.rs-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.rs-dot.start { background:#4285f4; }
+.rs-dot.end { background:#1a73e8; }
+.rs-field-label { flex:1; font-size:14px; color:#9aa0a6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rs-field-label.filled { color:#202124; font-weight:500; }
+.rs-field-clear { width:22px; height:22px; border-radius:50%; background:#e0e0e0; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; color:#5f6368; flex-shrink:0; transition:background .15s; }
+.rs-field-clear.vis { display:flex; }
+.rs-field-clear:hover { background:#e8f0fe; color:#4285f4; }
+
+.rs-tabs { display:flex; gap:8px; margin-bottom:14px; }
+.rs-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:10px 4px 9px; border-radius:16px; border:1.5px solid #e8eaed; background:#fff; cursor:pointer; transition:all .2s; }
+.rs-tab:hover { background:#f8f9fa; }
+.rs-tab.on { border-color:#4285f4; background:#e8f0fe; }
+.rs-tab-icon { color:#b0b4b8; transition:color .2s; }
+.rs-tab.on .rs-tab-icon { color:#4285f4; }
+.rs-tab-time { font-size:13px; font-weight:800; color:#9aa0a6; line-height:1; }
+.rs-tab.on .rs-tab-time { color:#1a73e8; }
+.rs-tab-time.loading { animation:tskel 0.8s ease infinite alternate; }
+@keyframes tskel { from{opacity:.3} to{opacity:.9} }
+.rs-tab-name { font-size:10px; font-weight:600; color:#9aa0a6; letter-spacing:.3px; }
+.rs-tab.on .rs-tab-name { color:#4285f4; }
+
+.rs-result { display:none; border-radius:16px; padding:14px 16px; align-items:center; gap:14px; background:#e8f0fe; border:1.5px solid rgba(66,133,244,.2); animation:rsfadein .25s ease; }
+@keyframes rsfadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.rs-result.show { display:flex; }
+.rs-result-icon { width:46px; height:46px; border-radius:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:rgba(66,133,244,.15); color:#4285f4; }
+.rs-result-main { flex:1; }
+.rs-result-time { font-size:28px; font-weight:900; color:#202124; line-height:1; letter-spacing:-.5px; }
+.rs-result-sub { font-size:12px; color:#9aa0a6; margin-top:2px; }
+.rs-result-dist { font-size:14px; font-weight:700; color:#5f6368; }
+
+.rm-start { width:16px; height:16px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(66,133,244,.6); }
+.rm-end { width:16px; height:16px; background:#1a73e8; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 8px rgba(26,115,232,.6); }
+
+.route-chip { position:fixed; top:76px; left:50%; transform:translateX(-50%) scale(0.9); z-index:1400; padding:9px 18px; border-radius:22px; font-size:13px; font-weight:600; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .22s,transform .22s; box-shadow:0 4px 20px rgba(0,0,0,.18); }
+.route-chip.show { opacity:1; transform:translateX(-50%) scale(1); }
+.route-chip.step-start { background:#4285f4; color:#fff; }
+.route-chip.step-end { background:#1a73e8; color:#fff; }
+
+#savedPanel { position:fixed; left:0; top:0; bottom:0; z-index:2000; width:320px; max-width:90vw; background:#fff; box-shadow:4px 0 32px rgba(0,0,0,0.15); display:flex; flex-direction:column; transform:translateX(-100%); transition:transform .35s cubic-bezier(.4,0,.2,1); }
+#savedPanel.open { transform:translateX(0); }
+#savedOverlay { position:fixed; inset:0; z-index:1999; background:rgba(0,0,0,0.28); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .25s; }
+#savedOverlay.show { opacity:1; pointer-events:all; }
+.sp-header { display:flex; align-items:center; gap:10px; padding:16px 16px 12px; border-bottom:1px solid #f1f3f4; flex-shrink:0; }
+.sp-title { flex:1; font-size:17px; font-weight:700; color:#202124; }
+#savedClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; transition:background .15s,color .15s; flex-shrink:0; }
+#savedClose:hover { background:#e8f0fe; color:#4285f4; }
+.sp-body { flex:1; overflow-y:auto; padding:10px 10px 20px; }
+.sp-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:48px 20px; color:#9aa0a6; font-size:14px; text-align:center; }
+.sp-empty svg { opacity:.25; }
+.sp-item { border-radius:16px; border:1.5px solid #e8eaed; background:#fff; margin-bottom:10px; overflow:hidden; transition:border-color .15s,box-shadow .15s; }
+.sp-item:hover { border-color:#c5d6f8; box-shadow:0 2px 12px rgba(66,133,244,.1); }
+.sp-item-header { display:flex; align-items:center; gap:10px; padding:12px 14px 8px; }
+.sp-item-name { flex:1; font-size:14px; font-weight:600; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sp-item-del { width:24px; height:24px; border-radius:50%; border:none; background:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#c5c8cc; transition:background .15s,color .15s; flex-shrink:0; }
+.sp-item-del:hover { background:#fee8e8; color:#d93025; }
+.sp-item-points { padding:0 14px 6px; display:flex; flex-direction:column; gap:4px; }
+.sp-pt { display:flex; align-items:center; gap:7px; font-size:12px; color:#5f6368; min-width:0; }
+.sp-pt-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.sp-pt-dot.s { background:#4285f4; }
+.sp-pt-dot.e { background:#1a73e8; }
+.sp-pt-lbl { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+.sp-item-meta { display:flex; align-items:center; gap:8px; padding:6px 14px 12px; flex-wrap:wrap; }
+.sp-badge { font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:#f1f3f4; color:#5f6368; display:inline-flex; align-items:center; gap:4px; }
+.sp-badge.mode { background:#e8f0fe; color:#1a73e8; }
+.sp-item-load { width:100%; padding:9px; border:none; background:#f8f9fa; color:#4285f4; font-size:13px; font-weight:600; cursor:pointer; border-top:1px solid #f1f3f4; transition:background .15s; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:6px; }
+.sp-item-load:hover { background:#e8f0fe; }
+
+#saveRouteDialog { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.9); z-index:3100; background:#fff; border-radius:20px; box-shadow:0 16px 48px rgba(0,0,0,0.22); padding:20px; width:290px; opacity:0; pointer-events:none; transition:opacity .2s,transform .22s cubic-bezier(.34,1.4,.64,1); }
+#saveRouteDialog.show { opacity:1; pointer-events:all; transform:translate(-50%,-50%) scale(1); }
+#saveRouteOverlay { position:fixed; inset:0; z-index:3099; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .2s; }
+#saveRouteOverlay.show { opacity:1; pointer-events:all; }
+#saveRouteDialog h3 { font-size:16px; font-weight:600; color:#202124; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+
+#wikiPanel { position:fixed; left:0; right:0; bottom:0; z-index:1300; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -4px 40px rgba(0,0,0,0.15); transform:translateY(100%); transition:transform .35s cubic-bezier(.4,0,.2,1); max-height:78vh; display:flex; flex-direction:column; }
+#wikiPanel.show { transform:translateY(0); }
+.wiki-handle { width:36px; height:4px; background:#e0e0e0; border-radius:2px; margin:12px auto 4px; flex-shrink:0; }
+.wiki-header { display:flex; align-items:center; gap:10px; padding:8px 16px 12px; flex-shrink:0; border-bottom:1px solid #f1f3f4; }
+.wiki-logo { width:32px; height:32px; border-radius:10px; background:#f1f3f4; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#4285f4; font-weight:900; font-size:17px; font-family:serif; }
+.wiki-header-text { flex:1; min-width:0; }
+.wiki-title { font-size:16px; font-weight:700; color:#202124; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wiki-dist { font-size:11px; color:#9aa0a6; margin-top:1px; }
+#wikiClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; flex-shrink:0; transition:background .15s,color .15s; }
+#wikiClose:hover { background:#e8f0fe; color:#4285f4; }
+.wiki-body { overflow-y:auto; padding:14px 16px 20px; flex:1; }
+.wiki-thumb { width:100%; max-height:180px; object-fit:cover; border-radius:14px; margin-bottom:14px; display:block; }
+.wiki-extract { font-size:14px; line-height:1.65; color:#3c4043; }
+.wiki-readmore { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:16px; padding:12px; border-radius:14px; background:#e8f0fe; border:none; cursor:pointer; width:100%; font-size:14px; font-weight:600; color:#1a73e8; transition:background .15s; }
+.wiki-readmore:hover { background:#d2e3fc; }
+.wiki-loading { display:flex; flex-direction:column; align-items:center; gap:12px; padding:32px 16px; color:#9aa0a6; font-size:14px; }
+.wiki-spinner { width:32px; height:32px; border:3px solid #e8f0fe; border-top-color:#4285f4; border-radius:50%; animation:wspin .7s linear infinite; }
+@keyframes wspin { to{transform:rotate(360deg)} }
+.wiki-none { text-align:center; padding:32px 16px; color:#9aa0a6; font-size:14px; }
+.wiki-none svg { margin-bottom:10px; opacity:.3; }
+#wikiOverlay { position:fixed; inset:0; z-index:1299; background:rgba(0,0,0,0.25); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .25s; }
+#wikiOverlay.show { opacity:1; pointer-events:all; }
+
+#credit { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:999; font-size:11px; color:rgba(255,255,255,0.55); background:rgba(0,0,0,0.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); padding:4px 12px; border-radius:20px; white-space:nowrap; pointer-events:all; }
+#credit a { color:rgba(255,255,255,0.7); text-decoration:none; font-weight:600; transition:color .15s; }
+#credit a:hover { color:#fff; }
+#toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%) translateY(8px); z-index:4000; background:rgba(32,33,36,0.92); color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; font-weight:500; box-shadow:0 4px 16px rgba(0,0,0,0.25); opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.ok::before { content:'✓  '; color:#7ab3f8; }
+#toast.err::before { content:'✕  '; color:#f28b82; }
+.udot { width:16px; height:16px; background:#4285f4; border:3px solid #fff; border-radius:50%; box-shadow:0 2px 6px rgba(66,133,244,.6); animation:udot 2s ease-out infinite; }
+@keyframes udot { 0%{box-shadow:0 0 0 0 rgba(66,133,244,.6),0 2px 6px rgba(66,133,244,.4)} 100%{box-shadow:0 0 0 14px rgba(66,133,244,0),0 2px 6px rgba(66,133,244,.4)} }
+
+.leaflet-bottom.leaflet-left { bottom:110px !important; left:16px !important; }
+.leaflet-control-zoom { border:none !important; box-shadow:0 2px 12px rgba(0,0,0,.15) !important; }
+.leaflet-control-zoom a { background:#fff !important; color:#5f6368 !important; border:none !important; font-weight:600 !important; width:36px !important; height:36px !important; line-height:36px !important; }
+.leaflet-control-zoom a:hover { background:#f1f3f4 !important; }
+.leaflet-control-zoom-in { border-radius:12px 12px 0 0 !important; }
+.leaflet-control-zoom-out { border-radius:0 0 12px 12px !important; }
+.leaflet-popup-content-wrapper { border-radius:14px !important; box-shadow:0 8px 24px rgba(0,0,0,.15) !important; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif !important; }
+.leaflet-popup-content { font-size:14px; color:#3c4043; }
+
+/* ── Music Button ──────────────────────────────────────────────────────────── */
+#musicBtn {
+  position:fixed; top:76px; left:16px; z-index:999;
+  width:26px; height:26px; border-radius:9px;
+  background:rgba(255,255,255,0.9); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(0,0,0,0.09); box-shadow:0 1px 6px rgba(0,0,0,0.1);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:#9aa0a6; transition:all .18s; padding:0;
+}
+#musicBtn:hover { background:#e8f0fe; color:#4285f4; border-color:rgba(66,133,244,.3); transform:scale(1.06); }
+#musicBtn.playing { background:#e8f0fe; color:#4285f4; border-color:rgba(66,133,244,.35); }
+#musicBtn.playing .music-note { animation:noteFloat .55s ease-in-out infinite alternate; }
+@keyframes noteFloat { from{transform:translateY(0) rotate(-5deg)} to{transform:translateY(-2px) rotate(5deg)} }
+
+#musicMenu {
+  position:fixed; top:108px; left:16px; z-index:1100;
+  background:rgba(255,255,255,0.97); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  border-radius:18px; box-shadow:0 8px 36px rgba(0,0,0,0.14);
+  border:1px solid rgba(0,0,0,0.07); padding:8px 6px 10px; width:240px;
+  transform:scale(0.88) translateX(-6px) translateY(-4px); transform-origin:left top;
+  opacity:0; pointer-events:none;
+  transition:transform .24s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;
+}
+#musicMenu.open { transform:scale(1) translateX(0) translateY(0); opacity:1; pointer-events:all; }
+.mm-title { font-size:10px; font-weight:700; letter-spacing:.8px; color:#9aa0a6; text-transform:uppercase; padding:3px 10px 7px; display:block; }
+.mm-track { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:11px; cursor:pointer; border:none; background:none; width:100%; text-align:left; transition:background .15s; font-family:inherit; }
+.mm-track:hover { background:#f1f3f4; }
+.mm-track.active { background:#e8f0fe; }
+.mm-ico { width:30px; height:30px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.mm-info { flex:1; min-width:0; }
+.mm-name { font-size:12px; font-weight:600; color:#3c4043; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mm-sub { font-size:10px; color:#9aa0a6; margin-top:1px; }
+.mm-bars { display:flex; align-items:flex-end; gap:2px; height:14px; margin-left:auto; flex-shrink:0; opacity:0; transition:opacity .2s; }
+.mm-track.active .mm-bars { opacity:1; }
+.mm-bars span { width:3px; border-radius:2px; background:#4285f4; display:block; transform-origin:bottom; }
+.mm-track.active .mm-bars span:nth-child(1) { height:6px; animation:mmbar .55s .0s ease-in-out infinite alternate; }
+.mm-track.active .mm-bars span:nth-child(2) { height:10px; animation:mmbar .55s .12s ease-in-out infinite alternate; }
+.mm-track.active .mm-bars span:nth-child(3) { height:8px; animation:mmbar .55s .24s ease-in-out infinite alternate; }
+@keyframes mmbar { from{transform:scaleY(0.35)} to{transform:scaleY(1)} }
+.mm-sep { height:1px; background:#f1f3f4; margin:5px 8px; }
+.mm-vol { display:flex; align-items:center; gap:8px; padding:6px 10px 4px; }
+.mm-vol-ico { color:#9aa0a6; flex-shrink:0; }
+.mm-vol input[type=range] { flex:1; height:3px; border-radius:2px; outline:none; cursor:pointer; appearance:none; -webkit-appearance:none; background:linear-gradient(to right,#4285f4 var(--v,70%),#e0e0e0 var(--v,70%)); }
+.mm-vol input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:#4285f4; box-shadow:0 1px 4px rgba(66,133,244,.4); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GAMIFICATION PANEL
+══════════════════════════════════════════════════════════════════════════════ */
+#gamePanel { position:fixed; top:0; right:0; bottom:0; z-index:2000; width:340px; max-width:95vw; background:#fff; box-shadow:-4px 0 32px rgba(0,0,0,0.15); display:flex; flex-direction:column; transform:translateX(100%); transition:transform .35s cubic-bezier(.4,0,.2,1); }
+#gamePanel.open { transform:translateX(0); }
+#gameOverlay { position:fixed; inset:0; z-index:1999; background:rgba(0,0,0,0.28); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .25s; }
+#gameOverlay.show { opacity:1; pointer-events:all; }
+
+.gp-hero { background:linear-gradient(135deg,#4285f4 0%,#1a73e8 100%); padding:20px 20px 24px; position:relative; overflow:hidden; flex-shrink:0; }
+.gp-hero::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.07); }
+.gp-hero::after { content:''; position:absolute; bottom:-20px; left:20px; width:80px; height:80px; border-radius:50%; background:rgba(255,255,255,0.05); }
+.gp-hero-top { display:flex; align-items:center; gap:12px; margin-bottom:16px; position:relative; z-index:1; }
+.gp-close { width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.15); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; transition:background .15s; margin-left:auto; flex-shrink:0; }
+.gp-close:hover { background:rgba(255,255,255,0.25); }
+.gp-avatar-big { width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,0.2); border:2.5px solid rgba(255,255,255,0.5); display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; transition:background .18s,transform .18s; position:relative; }
+.gp-avatar-big:hover { background:rgba(255,255,255,0.3); transform:scale(1.05); }
+.gp-avatar-big svg { color:#fff; }
+.gp-avatar-big .ava-edit-hint { position:absolute; inset:0; border-radius:50%; background:rgba(0,0,0,0.28); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .18s; color:#fff; }
+.gp-avatar-big:hover .ava-edit-hint { opacity:1; }
+.gp-hero-info { flex:1; min-width:0; }
+.gp-hero-name-wrap { display:flex; align-items:center; gap:6px; }
+.gp-hero-name { font-size:17px; font-weight:700; color:#fff; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+.gp-hero-name-edit { width:20px; height:20px; border-radius:50%; border:none; cursor:pointer; background:rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.8); transition:background .15s; flex-shrink:0; padding:0; }
+.gp-hero-name-edit:hover { background:rgba(255,255,255,0.28); color:#fff; }
+.gp-hero-sub { font-size:12px; color:rgba(255,255,255,0.75); margin-top:2px; }
+.gp-hero-name-input { background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.4); border-radius:10px; padding:4px 10px; font-size:15px; font-weight:700; color:#fff; outline:none; width:100%; font-family:inherit; display:none; }
+.gp-hero-name-input::placeholder { color:rgba(255,255,255,0.5); }
+.gp-hero-name-input:focus { background:rgba(255,255,255,0.25); border-color:rgba(255,255,255,0.7); }
+
+#avatarPicker { position:fixed; left:0; right:0; bottom:0; z-index:2500; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -4px 40px rgba(0,0,0,0.15); transform:translateY(100%); transition:transform .35s cubic-bezier(.4,0,.2,1); max-height:88vh; display:flex; flex-direction:column; }
+#avatarPicker.show { transform:translateY(0); }
+#avatarPickerOverlay { position:fixed; inset:0; z-index:2499; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .25s; }
+#avatarPickerOverlay.show { opacity:1; pointer-events:all; }
+.ap-handle { width:36px; height:4px; background:#e0e0e0; border-radius:2px; margin:12px auto 0; flex-shrink:0; }
+.ap-header { display:flex; align-items:center; gap:10px; padding:12px 16px 14px; flex-shrink:0; border-bottom:1px solid #f1f3f4; }
+.ap-title { flex:1; font-size:16px; font-weight:700; color:#202124; }
+#apClose { width:30px; height:30px; border-radius:50%; background:#f1f3f4; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#5f6368; transition:background .15s,color .15s; }
+#apClose:hover { background:#e8f0fe; color:#4285f4; }
+.ap-body { overflow-y:auto; padding:16px; }
+.ap-section-lbl { font-size:10px; font-weight:700; letter-spacing:.7px; color:#9aa0a6; text-transform:uppercase; margin-bottom:10px; margin-top:4px; }
+
+/* ── TABS inside avatar picker ─────────────────────────────── */
+.ap-tabs { display:flex; gap:4px; margin-bottom:14px; background:#f1f3f4; border-radius:12px; padding:3px; }
+.ap-tab { flex:1; padding:7px 4px; border:none; background:none; border-radius:9px; font-size:12px; font-weight:600; color:#9aa0a6; cursor:pointer; transition:all .18s; font-family:inherit; }
+.ap-tab.active { background:#fff; color:#4285f4; box-shadow:0 1px 6px rgba(0,0,0,.1); }
+.ap-tab-panel { display:none; }
+.ap-tab-panel.active { display:block; }
+
+/* ── Avatar grid ────────────────────────────────────────────── */
+.ap-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:12px; }
+.ap-item { aspect-ratio:1; border-radius:16px; border:2px solid #e8eaed; background:#f8f9fa; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all .18s; gap:4px; padding:6px 4px; }
+.ap-item:hover { border-color:#c5d6f8; background:#e8f0fe; }
+.ap-item.selected { border-color:#4285f4; background:#e8f0fe; box-shadow:0 0 0 3px rgba(66,133,244,.18); }
+.ap-item svg { color:#5f6368; transition:color .18s; }
+.ap-item:hover svg, .ap-item.selected svg { color:#4285f4; }
+.ap-item-lbl { font-size:9px; font-weight:600; color:#9aa0a6; text-align:center; line-height:1.2; }
+.ap-item.selected .ap-item-lbl { color:#4285f4; }
+.ap-item-emoji { font-size:22px; line-height:1; }
+
+/* Custom symbol input */
+.ap-custom-sym { display:flex; align-items:center; gap:10px; margin-top:4px; margin-bottom:4px; }
+.ap-custom-sym input { width:56px; height:56px; border:2px solid #e8eaed; border-radius:16px; background:#f8f9fa; font-size:28px; text-align:center; outline:none; cursor:text; transition:border-color .18s; font-family:inherit; padding:0; }
+.ap-custom-sym input:focus { border-color:#4285f4; background:#fff; }
+.ap-custom-sym input.selected { border-color:#4285f4; background:#e8f0fe; box-shadow:0 0 0 3px rgba(66,133,244,.18); }
+.ap-custom-sym-lbl { font-size:13px; color:#5f6368; }
+
+/* ── Preset color swatches ──────────────────────────────────── */
+.ap-colors { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:14px; }
+.ap-color { width:30px; height:30px; border-radius:50%; border:2.5px solid transparent; cursor:pointer; transition:transform .15s,border-color .15s; flex-shrink:0; }
+.ap-color:hover { transform:scale(1.18); }
+.ap-color.selected { border-color:#202124; transform:scale(1.12); box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(0,0,0,.25); }
+
+/* ── Color picker (canvas based) ───────────────────────────── */
+/* ── Color picker — vertical stack, no overflow ─────────────── */
+.ap-colorpicker-wrap { display:flex; flex-direction:column; gap:8px; }
+.ap-cp-canvas-wrap { position:relative; width:100%; }
+#apColorCanvas { border-radius:12px; cursor:crosshair; display:block; width:100%; height:160px; touch-action:none; }
+.ap-cp-cursor { position:absolute; width:14px; height:14px; border-radius:50%; border:2.5px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.3); pointer-events:none; transform:translate(-50%,-50%); top:50%; left:50%; }
+.ap-cp-lbl { font-size:10px; color:#9aa0a6; font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-bottom:3px; }
+#apHueSlider { width:100%; height:14px; border-radius:8px; outline:none; cursor:pointer; -webkit-appearance:none; appearance:none; background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); display:block; box-sizing:border-box; }
+#apHueSlider::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:#fff; border:2px solid rgba(0,0,0,.25); box-shadow:0 1px 5px rgba(0,0,0,.3); cursor:pointer; }
+.ap-cp-hex-row { display:flex; gap:6px; align-items:center; }
+.ap-cp-hex-input { flex:1; min-width:0; border:1.5px solid #e8eaed; border-radius:10px; padding:8px 12px; font-size:13px; font-family:monospace; color:#202124; outline:none; transition:border-color .18s; box-sizing:border-box; }
+.ap-cp-hex-input:focus { border-color:#4285f4; }
+.ap-cp-apply { flex-shrink:0; padding:8px 16px; border-radius:10px; background:#4285f4; color:#fff; border:none; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:background .15s; }
+.ap-cp-apply:hover { background:#1a73e8; }
+.ap-cp-preview { display:flex; align-items:center; gap:10px; padding:8px 10px; background:#f8f9fa; border-radius:12px; }
+.ap-cp-preview-box { width:32px; height:32px; border-radius:9px; border:1.5px solid #e8eaed; flex-shrink:0; }
+
+/* Gradient second color */
+.ap-grad-row { display:flex; align-items:center; gap:10px; margin-top:6px; }
+.ap-grad-lbl { font-size:12px; color:#5f6368; flex-shrink:0; }
+.ap-grad-swatch { width:28px; height:28px; border-radius:8px; border:1.5px solid #e8eaed; cursor:pointer; flex-shrink:0; transition:transform .15s; }
+.ap-grad-swatch:hover { transform:scale(1.1); }
+.ap-grad-swatch.active { border-color:#4285f4; box-shadow:0 0 0 2px rgba(66,133,244,.3); }
+.ap-grad-preview { flex:1; height:28px; border-radius:8px; border:1.5px solid #e8eaed; }
+
+/* Username section */
+.ap-username-wrap { display:flex; flex-direction:column; gap:10px; }
+.ap-field-row { display:flex; flex-direction:column; gap:5px; }
+.ap-field-lbl { font-size:11px; font-weight:600; color:#9aa0a6; letter-spacing:.3px; }
+.ap-field-input-wrap { display:flex; align-items:center; gap:0; border:1.5px solid #e8eaed; border-radius:12px; overflow:hidden; transition:border-color .18s; background:#fff; }
+.ap-field-input-wrap:focus-within { border-color:#4285f4; }
+.ap-field-prefix { padding:10px 6px 10px 12px; font-size:14px; font-weight:700; color:#4285f4; background:#f8f9fa; border-right:1px solid #e8eaed; flex-shrink:0; }
+.ap-field-input { flex:1; border:none; outline:none; padding:10px 12px; font-size:14px; color:#202124; background:transparent; font-family:inherit; }
+.ap-field-input::placeholder { color:#c5c8cc; }
+.ap-field-hint { font-size:11px; color:#9aa0a6; padding:0 2px; }
+.ap-field-hint.ok { color:#0f9d58; }
+.ap-field-hint.err { color:#d93025; }
+.gp-level-badge { position:relative; z-index:1; }
+.gp-xp-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.gp-xp-label { font-size:11px; color:rgba(255,255,255,.75); font-weight:600; }
+.gp-xp-nums { font-size:11px; color:rgba(255,255,255,.9); font-weight:700; }
+.gp-xp-track { width:100%; height:7px; background:rgba(255,255,255,.2); border-radius:4px; overflow:hidden; }
+.gp-xp-track-fill { height:100%; background:#fff; border-radius:4px; transition:width .8s cubic-bezier(.4,0,.2,1); box-shadow:0 0 8px rgba(255,255,255,.5); }
+
+.gp-stats-row { display:flex; gap:0; background:#f8f9fa; border-bottom:1px solid #f1f3f4; flex-shrink:0; }
+.gp-stat { flex:1; display:flex; flex-direction:column; align-items:center; padding:14px 8px; position:relative; }
+.gp-stat + .gp-stat::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:1px; background:#e8eaed; }
+.gp-stat-val { font-size:20px; font-weight:800; color:#202124; line-height:1; }
+.gp-stat-lbl { font-size:10px; color:#9aa0a6; font-weight:600; margin-top:3px; letter-spacing:.2px; }
+.gp-stat-icon { color:#4285f4; margin-bottom:4px; }
+
+.gp-body { flex:1; overflow-y:auto; }
+.gp-section { padding:16px 16px 4px; }
+.gp-section-title { font-size:11px; font-weight:700; letter-spacing:.7px; color:#9aa0a6; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.gp-section-title svg { color:#4285f4; }
+
+.gp-streak-card { background:linear-gradient(135deg,#e8f0fe,#d2e3fc); border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:14px; border:1.5px solid rgba(66,133,244,.15); margin-bottom:4px; }
+.gp-streak-icon { width:44px; height:44px; border-radius:14px; background:linear-gradient(135deg,#4285f4,#1a73e8); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 3px 12px rgba(66,133,244,.35); }
+.gp-streak-icon svg { color:#fff; }
+.gp-streak-val { font-size:28px; font-weight:900; color:#1a73e8; line-height:1; }
+.gp-streak-lbl { font-size:12px; color:#5f6368; margin-top:1px; }
+.gp-streak-best { font-size:11px; color:#9aa0a6; margin-top:3px; }
+
+.gp-achievements { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.gp-ach { border-radius:14px; border:1.5px solid #e8eaed; background:#fff; padding:12px 12px 11px; display:flex; flex-direction:column; gap:7px; transition:border-color .18s,box-shadow .18s; position:relative; overflow:hidden; }
+.gp-ach:hover { border-color:#c5d6f8; box-shadow:0 2px 12px rgba(66,133,244,.1); }
+.gp-ach.unlocked { border-color:rgba(66,133,244,.3); background:#e8f0fe; }
+.gp-ach.unlocked::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 22px 22px 0; border-color:transparent #4285f4 transparent transparent; }
+.gp-ach-ico { width:32px; height:32px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; color:#b0b4b8; transition:all .2s; }
+.gp-ach.unlocked .gp-ach-ico { background:rgba(66,133,244,.15); color:#4285f4; }
+.gp-ach-name { font-size:12px; font-weight:700; color:#202124; line-height:1.3; }
+.gp-ach.locked .gp-ach-name { color:#9aa0a6; }
+.gp-ach-desc { font-size:10px; color:#9aa0a6; line-height:1.4; }
+.gp-ach-prog { height:4px; border-radius:3px; background:#e8eaed; overflow:hidden; margin-top:2px; }
+.gp-ach-prog-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,#4285f4,#1a73e8); transition:width .5s ease; }
+.gp-ach.locked .gp-ach-prog-fill { background:#d0d4d8; }
+.gp-ach-pct { font-size:9px; color:#9aa0a6; font-weight:600; margin-top:1px; }
+.gp-ach.unlocked .gp-ach-pct { color:#4285f4; }
+
+.gp-challenge { border-radius:14px; border:1.5px solid #e8eaed; background:#fff; padding:12px 14px; display:flex; align-items:center; gap:12px; margin-bottom:8px; transition:all .18s; }
+.gp-challenge:hover { border-color:#c5d6f8; }
+.gp-challenge.done { background:#e8f0fe; border-color:rgba(66,133,244,.25); }
+.gp-ch-ico { width:36px; height:36px; border-radius:11px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#f1f3f4; color:#5f6368; }
+.gp-challenge.done .gp-ch-ico { background:rgba(66,133,244,.15); color:#4285f4; }
+.gp-ch-info { flex:1; min-width:0; }
+.gp-ch-name { font-size:13px; font-weight:600; color:#202124; }
+.gp-challenge.done .gp-ch-name { color:#1a73e8; text-decoration:line-through; text-decoration-color:rgba(66,133,244,.4); }
+.gp-ch-sub { font-size:11px; color:#9aa0a6; margin-top:1px; }
+.gp-ch-xp { font-size:12px; font-weight:700; color:#4285f4; white-space:nowrap; }
+.gp-ch-check { width:22px; height:22px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:#e8eaed; color:#b0b4b8; transition:all .2s; }
+.gp-challenge.done .gp-ch-check { background:#4285f4; color:#fff; }
+
+#levelUpOverlay { position:fixed; inset:0; z-index:9000; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; opacity:0; transition:opacity .3s; }
+#levelUpOverlay.show { opacity:1; }
+.lu-card { background:#fff; border-radius:28px; box-shadow:0 24px 80px rgba(0,0,0,.22); padding:32px 40px 28px; text-align:center; animation:luPop .45s cubic-bezier(.34,1.56,.64,1) forwards; position:relative; overflow:hidden; }
+.lu-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(66,133,244,.06),transparent); }
+@keyframes luPop { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+.lu-ring { width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg,#4285f4,#1a73e8); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; box-shadow:0 8px 32px rgba(66,133,244,.45); animation:luPulse 1.4s ease infinite; }
+@keyframes luPulse { 0%,100%{box-shadow:0 8px 32px rgba(66,133,244,.45)} 50%{box-shadow:0 8px 48px rgba(66,133,244,.7)} }
+.lu-ring svg { color:#fff; }
+.lu-headline { font-size:11px; font-weight:700; letter-spacing:1.5px; color:#4285f4; text-transform:uppercase; margin-bottom:6px; }
+.lu-level { font-size:48px; font-weight:900; color:#202124; line-height:1; letter-spacing:-2px; }
+.lu-name { font-size:16px; font-weight:600; color:#5f6368; margin-top:4px; }
+.lu-particles { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.lu-particle { position:absolute; width:6px; height:6px; border-radius:50%; background:#4285f4; animation:luFall 1.2s ease-out forwards; }
+@keyframes luFall { 0%{transform:translateY(-20px) scale(1);opacity:1} 100%{transform:translateY(200px) scale(0.3);opacity:0} }
+
+.xp-pop { position:fixed; z-index:5000; font-size:14px; font-weight:800; color:#4285f4; pointer-events:none; white-space:nowrap; text-shadow:0 2px 8px rgba(66,133,244,.3); animation:xpFloat 1.4s ease-out forwards; }
+@keyframes xpFloat { 0%{opacity:1;transform:translateY(0) scale(1)} 30%{opacity:1;transform:translateY(-16px) scale(1.1)} 100%{opacity:0;transform:translateY(-52px) scale(.8)} }
+
+.ach-toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(10px); z-index:4500; background:#fff; border-radius:18px; box-shadow:0 8px 32px rgba(0,0,0,.18); border:1.5px solid rgba(66,133,244,.2); padding:10px 16px; display:flex; align-items:center; gap:10px; opacity:0; pointer-events:none; transition:opacity .25s,transform .3s cubic-bezier(.34,1.4,.64,1); white-space:nowrap; }
+.ach-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.ach-toast-ico { width:32px; height:32px; border-radius:10px; flex-shrink:0; background:#e8f0fe; display:flex; align-items:center; justify-content:center; color:#4285f4; }
+.ach-toast-text { flex:1; }
+.ach-toast-title { font-size:11px; font-weight:700; color:#4285f4; text-transform:uppercase; letter-spacing:.5px; }
+.ach-toast-name { font-size:13px; font-weight:700; color:#202124; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="searchWrap">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchInput" type="text" placeholder="Поиск городов и мест..." autocomplete="off">
+    <div id="suggestions"></div>
+  </div>
+  <button id="shareBtn" title="Поделиться">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+  </button>
+</div>
+
+<!-- Music Button -->
+<button id="musicBtn" title="Фоновая музыка">
+  <svg class="music-note" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+</button>
+
+<!-- Music Menu -->
+<div id="musicMenu">
+  <span class="mm-title">Расслабляющая музыка</span>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" data-name="Lofi Rain" data-sub="дождь · фортепиано">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="19" x2="8" y2="5"/><line x1="12" y1="19" x2="12" y2="9"/><line x1="4" y1="19" x2="4" y2="13"/><path d="M2 3l4-1v4L2 7"/><path d="M16 3h4v4l-4 1V3z"/><path d="M12 13l8-2"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Lofi Rain</div><div class="mm-sub">дождь · фортепиано</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" data-name="Forest Calm" data-sub="лес · природа">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14l-5-10-5 10"/><path d="M3 20l7-6h4l7 6"/><line x1="12" y1="20" x2="12" y2="4"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Forest Calm</div><div class="mm-sub">лес · природа</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" data-name="Ocean Waves" data-sub="океан · медитация">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 7c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Ocean Waves</div><div class="mm-sub">океан · медитация</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" data-name="Night Jazz" data-sub="джаз · ночь">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Night Jazz</div><div class="mm-sub">джаз · ночь</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" data-name="Zen Ambient" data-sub="эмбиент · зен">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Zen Ambient</div><div class="mm-sub">эмбиент · зен</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" data-name="Piano Dreams" data-sub="фортепиано · классика">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M8 6V4M12 6V4M16 6V4"/><line x1="6" y1="10" x2="6" y2="16"/><line x1="10" y1="10" x2="10" y2="16"/><line x1="14" y1="10" x2="14" y2="16"/><line x1="18" y1="10" x2="18" y2="16"/><rect x="8" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="12" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Piano Dreams</div><div class="mm-sub">фортепиано · классика</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <div class="mm-sep"></div>
+  <div class="mm-vol">
+    <div class="mm-vol-ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    </div>
+    <input type="range" id="musicVolume" min="0" max="100" value="50" style="--v:50%">
+  </div>
+</div>
+
+<!-- Route Sheet -->
+<div id="routeSheet">
+  <div class="rs-handle"></div>
+  <div class="rs-body">
+    <div class="rs-header">
+      <div class="rs-title"><div class="rs-title-dot"></div>Маршрут</div>
+      <button id="rsSaveBtn" title="Сохранить маршрут">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Сохранить
+      </button>
+      <button id="rsOpenSavedBtn" title="Мои маршруты">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button id="routeSheetClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="rs-inputs">
+      <div class="rs-field">
+        <div class="rs-dot start"></div>
+        <div class="rs-field-label" id="rsStartLbl">Откуда...</div>
+        <button class="rs-field-clear" id="rsStartClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="rs-field">
+        <div class="rs-dot end"></div>
+        <div class="rs-field-label" id="rsEndLbl">Куда...</div>
+        <button class="rs-field-clear" id="rsEndClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="rs-tabs">
+      <button class="rs-tab on" data-mode="driving">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+        <span class="rs-tab-time" id="tt-driving">—</span>
+        <span class="rs-tab-name">Авто</span>
+      </button>
+      <button class="rs-tab" data-mode="cycling">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+        <span class="rs-tab-time" id="tt-cycling">—</span>
+        <span class="rs-tab-name">Вело</span>
+      </button>
+      <button class="rs-tab" data-mode="walking">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg></span>
+        <span class="rs-tab-time" id="tt-walking">—</span>
+        <span class="rs-tab-name">Пешком</span>
+      </button>
+    </div>
+    <div class="rs-result" id="rsResult" data-mode="driving">
+      <div class="rs-result-icon" id="rsIcon"></div>
+      <div class="rs-result-main">
+        <div class="rs-result-time" id="rsTime">—</div>
+        <div class="rs-result-sub" id="rsSub"></div>
+      </div>
+      <div class="rs-result-dist" id="rsDist"></div>
+    </div>
+  </div>
+</div>
+
+<div class="route-chip" id="routeChip"></div>
+
+<div id="sidebar">
+  <!-- Кнопки меню (скрыты по умолчанию) -->
+  <button id="xpBadge" title="Мой профиль">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    <div class="xp-pip" id="xpPip">1</div>
+  </button>
+  <button class="fab" id="pinBtn" title="Метка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+  </button>
+  <button class="fab" id="routeBtn" title="Маршрут">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </button>
+  <button class="fab" id="rulerBtn" title="Линейка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12"/><polyline points="6 8 2 12 6 16"/><polyline points="18 8 22 12 18 16"/></svg>
+  </button>
+  <button class="fab" id="menuBtn" title="Слои">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+  </button>
+  <button class="fab" id="randomBtn" title="Случайное место">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+  </button>
+  <!-- Кнопка-гамбургер (всегда видна) -->
+  <button class="fab" id="sidebarToggle" title="Меню">
+    <svg id="toggleIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="20" y2="18"/>
+    </svg>
+  </button>
+  <!-- Местоположение (всегда видна) -->
+  <button class="fab" id="locBtn" title="Местоположение">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 3" opacity=".4"/></svg>
+  </button>
+</div>
+
+<div id="mapMenu">
+  <span class="menu-title">Тип карты</span>
+  <div class="mbase-grid">
+    <button class="mbase-btn on" data-t="light"><div class="mb-ico"><img src="https://tile.openstreetmap.org/6/32/21.png" alt=""></div>Обычная</button>
+    <button class="mbase-btn" data-t="dark"><div class="mb-ico"><img src="https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/6/32/21.png" alt=""></div>Тёмная</button>
+    <button class="mbase-btn" data-t="sat"><div class="mb-ico"><img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt=""></div>Спутник</button>
+    <button class="mbase-btn" data-t="hyb">
+      <div class="mb-ico" style="position:relative">
+        <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <img src="https://cartodb-basemaps-a.global.ssl.fastly.net/light_only_labels/6/32/21.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85">
+      </div>Гибрид
+    </button>
+  </div>
+  <div class="menu-sep"></div>
+  <span class="menu-title">Слои</span>
+  <button class="mlay" id="layTraffic"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div><div class="mlay-info"><div class="mlay-name">Пробки</div><div class="mlay-sub">TomTom Flow</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layWeather"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></div><div class="mlay-info"><div class="mlay-name">Погода</div><div class="mlay-sub">Осадки (OpenMeteo)</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layBike"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></div><div class="mlay-info"><div class="mlay-name">Велодорожки</div><div class="mlay-sub">CyclOSM</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layTerrain"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-12 4 7 3-5 5 10"/></svg></div><div class="mlay-info"><div class="mlay-name">Рельеф</div><div class="mlay-sub">Горы и высоты</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layRail"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16"/><path d="M8 3v8M16 3v8"/><path d="M8 17l-2 4M16 17l2 4"/></svg></div><div class="mlay-info"><div class="mlay-name">ЖД пути</div><div class="mlay-sub">OpenRailwayMap</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layHike"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M6.5 18c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M3 20h18"/></svg></div><div class="mlay-info"><div class="mlay-name">Пешие тропы</div><div class="mlay-sub">Waymarked Trails</div></div><div class="mlay-toggle"></div></button>
+</div>
+
+<div id="rulerHint">
+  <span class="hint-text" id="rulerHintText">Кликните на карту, чтобы начать</span>
+  <span class="dist-val" id="rulerDist" style="display:none"></span>
+  <button id="rulerClearBtn">✕ Сбросить</button>
+</div>
+
+<div id="pinDialogOverlay"></div>
+<div id="pinDialog">
+  <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Новая метка</h3>
+  <input id="pinLabelInput" type="text" placeholder="Название места..." maxlength="40" autocomplete="off">
+  <div class="pin-dialog-btns">
+    <button id="pinCancelBtn">Отмена</button>
+    <button id="pinConfirmBtn">Добавить</button>
+  </div>
+</div>
+
+<div id="savedOverlay"></div>
+<div id="savedPanel">
+  <div class="sp-header">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4285f4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    <span class="sp-title">Сохранённые маршруты</span>
+    <button id="savedClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sp-body" id="spBody"></div>
+</div>
+
+<div id="saveRouteOverlay"></div>
+<div id="saveRouteDialog">
+  <h3>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Сохранить маршрут
+  </h3>
+  <input id="saveRouteNameInput" type="text" placeholder="Название маршрута..." maxlength="40" autocomplete="off">
+  <div class="srd-btns">
+    <button id="srdCancelBtn">Отмена</button>
+    <button id="srdConfirmBtn">Сохранить</button>
+  </div>
+</div>
+
+<div id="wikiOverlay"></div>
+<div id="wikiPanel">
+  <div class="wiki-handle"></div>
+  <div class="wiki-header">
+    <div class="wiki-logo">W</div>
+    <div class="wiki-header-text">
+      <div class="wiki-title" id="wikiTitle">Wikipedia</div>
+      <div class="wiki-dist" id="wikiDist"></div>
+    </div>
+    <button id="wikiClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="wiki-body" id="wikiBody"></div>
+</div>
+
+<div id="avatarPickerOverlay"></div>
+<div id="avatarPicker">
+  <div class="ap-handle"></div>
+  <div class="ap-header">
+    <span class="ap-title">Кастомизация профиля</span>
+    <button id="apClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="ap-body">
+    <div class="ap-tabs">
+      <button class="ap-tab active" data-tab="avatar">Аватар</button>
+      <button class="ap-tab" data-tab="color">Цвет</button>
+      <button class="ap-tab" data-tab="profile">Профиль</button>
+    </div>
+
+    <!-- TAB: Avatar -->
+    <div class="ap-tab-panel active" id="apTabAvatar">
+      <div class="ap-section-lbl">SVG иконки</div>
+      <div class="ap-grid" id="apGrid"></div>
+      <div class="ap-section-lbl">Эмодзи</div>
+      <div class="ap-grid" id="apEmojiGrid"></div>
+      <div class="ap-section-lbl">Свой символ</div>
+      <div class="ap-custom-sym">
+        <input type="text" id="apCustomSymInput" maxlength="2" placeholder="★">
+        <span class="ap-custom-sym-lbl">Введите любой символ, букву или эмодзи</span>
+      </div>
+    </div>
+
+    <!-- TAB: Color -->
+    <div class="ap-tab-panel" id="apTabColor">
+      <div class="ap-section-lbl">Готовые цвета</div>
+      <div class="ap-colors" id="apColors"></div>
+      <div class="ap-section-lbl" style="margin-top:14px">Своя палитра</div>
+      <div class="ap-colorpicker-wrap">
+        <div class="ap-grad-row" style="margin-bottom:6px">
+          <span class="ap-grad-lbl">Редактировать:</span>
+          <div class="ap-grad-swatch active" id="apGradSwatch1" title="Цвет 1"></div>
+          <div class="ap-grad-swatch" id="apGradSwatch2" title="Цвет 2"></div>
+          <div class="ap-grad-preview" id="apGradPreview"></div>
+        </div>
+        <div class="ap-cp-canvas-wrap">
+          <canvas id="apColorCanvas" width="320" height="160"></canvas>
+          <div class="ap-cp-cursor" id="apCpCursor"></div>
+        </div>
+        <div>
+          <div class="ap-cp-lbl">Оттенок</div>
+          <input type="range" id="apHueSlider" min="0" max="360" value="220">
+        </div>
+        <div>
+          <div class="ap-cp-lbl">HEX код</div>
+          <div class="ap-cp-hex-row">
+            <input type="text" class="ap-cp-hex-input" id="apHexInput1" placeholder="#4285f4" maxlength="7">
+            <button class="ap-cp-apply" id="apHexApply1">OK</button>
+          </div>
+        </div>
+        <div class="ap-cp-preview">
+          <div class="ap-cp-preview-box" id="apCpPreviewBox"></div>
+          <div style="font-size:12px;color:#5f6368;flex:1">Предпросмотр выбранного цвета</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Profile -->
+    <div class="ap-tab-panel" id="apTabProfile">
+      <div class="ap-username-wrap">
+        <div class="ap-field-row">
+          <div class="ap-field-lbl">НИКНЕЙМ</div>
+          <div class="ap-field-input-wrap">
+            <input class="ap-field-input" id="apNicknameInput" type="text" maxlength="20" placeholder="Твоё имя...">
+          </div>
+          <div class="ap-field-hint" id="apNicknameHint">Отображается в профиле</div>
+        </div>
+        <div class="ap-field-row" style="margin-top:14px">
+          <div class="ap-field-lbl">USERNAME</div>
+          <div class="ap-field-input-wrap">
+            <div class="ap-field-prefix">@</div>
+            <input class="ap-field-input" id="apUsernameInput" type="text" maxlength="20" placeholder="username" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="ap-field-hint" id="apUsernameHint">Только буквы, цифры и _</div>
+        </div>
+        <button id="apProfileSave" style="margin-top:18px;width:100%;padding:12px;border-radius:12px;border:none;background:#4285f4;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s">Сохранить профиль</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverlay"></div>
+<div id="gamePanel">
+  <div class="gp-hero">
+    <div class="gp-hero-top">
+      <div class="gp-avatar-big" id="gpAvatarBig" title="Сменить аватарку">
+        <span id="gpAvatarIcon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+        <div class="ava-edit-hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+      </div>
+      <div class="gp-hero-info">
+        <div class="gp-hero-name-wrap">
+          <div class="gp-hero-name" id="gpLevelName">Новичок</div>
+          <button class="gp-hero-name-edit" id="gpNameEditBtn" title="Изменить имя">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+        <input class="gp-hero-name-input" id="gpNameInput" type="text" maxlength="20" placeholder="Ваше имя...">
+        <div class="gp-hero-sub" id="gpLevelSub">Уровень 1</div>
+        <div class="gp-hero-sub" id="gpUsernameSub" style="opacity:.7;font-size:11px;margin-top:1px"></div>
+        <div class="gp-hero-sub" id="gpUsernameSub" style="opacity:.7;font-size:11px;margin-top:1px"></div>
+      </div>
+      <button class="gp-close" id="gpClose">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gp-level-badge">
+      <div class="gp-xp-row">
+        <span class="gp-xp-label" id="gpXpLabel">0 / 100 XP</span>
+        <span class="gp-xp-nums" id="gpLvlBig">Ур. 1</span>
+      </div>
+      <div class="gp-xp-track"><div class="gp-xp-track-fill" id="gpXpFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="gp-stats-row">
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <div class="gp-stat-val" id="statPins">0</div>
+      <div class="gp-stat-lbl">Метки</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div class="gp-stat-val" id="statRoutes">0</div>
+      <div class="gp-stat-lbl">Маршруты</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+      <div class="gp-stat-val" id="statWiki">0</div>
+      <div class="gp-stat-lbl">Статьи</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <div class="gp-stat-val" id="statXpTotal">0</div>
+      <div class="gp-stat-lbl">Всего XP</div>
+    </div>
+  </div>
+
+  <div class="gp-body" id="gpBody">
+    <div class="gp-section">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Активность
+      </div>
+      <div class="gp-streak-card">
+        <div class="gp-streak-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <div class="gp-streak-val" id="streakVal">0</div>
+          <div class="gp-streak-lbl">дней подряд</div>
+          <div class="gp-streak-best" id="streakBest">Рекорд: 0 дн.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gp-section">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Ежедневные задания
+      </div>
+      <div id="challengesList"></div>
+    </div>
+
+    <div class="gp-section" style="padding-bottom:24px">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+        Достижения
+      </div>
+      <div class="gp-achievements" id="achGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="levelUpOverlay">
+  <div class="lu-card">
+    <div class="lu-particles" id="luParticles"></div>
+    <div class="lu-ring">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <div class="lu-headline">Новый уровень!</div>
+    <div class="lu-level" id="luLevel">2</div>
+    <div class="lu-name" id="luName">Исследователь</div>
+  </div>
+</div>
+
+<div class="ach-toast" id="achToast">
+  <div class="ach-toast-ico" id="achToastIco"></div>
+  <div class="ach-toast-text">
+    <div class="ach-toast-title">Достижение разблокировано</div>
+    <div class="ach-toast-name" id="achToastName"></div>
+  </div>
+</div>
+
+<div id="credit">Made by <a href="https://t.me/revos9" target="_blank">@revos9</a></div>
+<div id="toast"></div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map',{zoomControl:false}).setView([20,0],2);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+
+const ICO_DEL = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+const ICO_PIN = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+const ICO_HIST = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
+/* ══════════════════════════════════════════════════════════════════════
+   SIDEBAR TOGGLE
+══════════════════════════════════════════════════════════════════════ */
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const toggleIcon = document.getElementById('toggleIcon');
+
+const ICON_MENU = '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>';
+const ICON_CLOSE = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+
+sidebarToggle.addEventListener('click', e => {
+  e.stopPropagation();
+  const isOpen = sidebar.classList.toggle('menu-open');
+  sidebarToggle.classList.toggle('open', isOpen);
+  toggleIcon.innerHTML = isOpen ? ICON_CLOSE : ICON_MENU;
+  // Закрываем mapMenu если открываем sidebar
+  if (isOpen) {
+    mapMenu.classList.remove('open');
+    document.getElementById('menuBtn').classList.remove('open');
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!sidebar.contains(e.target) && !mapMenu.contains(e.target)) {
+    sidebar.classList.remove('menu-open');
+    sidebarToggle.classList.remove('open');
+    toggleIcon.innerHTML = ICON_MENU;
+  }
+});
+
+/* GAMIFICATION ENGINE */
+const GK = 'geogo_game_v2';
+const PK = 'geogo_profile_v2';
+
+const AVATARS = [
+  {id:'person',  lbl:'Путник',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'},
+  {id:'compass', lbl:'Компас',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>'},
+  {id:'map',     lbl:'Карта',     svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>'},
+  {id:'mountain',lbl:'Горы',      svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-12 4 7 3-5 5 10"/></svg>'},
+  {id:'globe',   lbl:'Глобус',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'},
+  {id:'plane',   lbl:'Самолёт',   svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>'},
+  {id:'car',     lbl:'Авто',      svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>'},
+  {id:'bike',    lbl:'Вело',      svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>'},
+  {id:'ship',    lbl:'Корабль',   svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2H2v2z"/><path d="M7 12V8h10v4M12 3v5"/><path d="M5 12l7 4 7-4"/></svg>'},
+  {id:'star',    lbl:'Звезда',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'},
+  {id:'fire',    lbl:'Огонь',     svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c0 6-6 6-6 12a6 6 0 0 0 12 0c0-3-1.5-5-3-6 0 2-1.5 3-1.5 3S12 8 12 2z"/></svg>'},
+  {id:'flag',    lbl:'Флаг',      svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>'},
+  {id:'camera',  lbl:'Камера',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'},
+  {id:'trophy',  lbl:'Кубок',     svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 21 12 21 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M7 4H17l-2 7a5 5 0 0 1-10 0L3 4"/><path d="M17 4h2a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4M7 4H5a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4"/></svg>'},
+  {id:'rocket',  lbl:'Ракета',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>'},
+  {id:'diamond', lbl:'Брилл.',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41L13.7 2.71a2.41 2.41 0 0 0-3.41 0z"/></svg>'},
+  {id:'zap',     lbl:'Молния',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'},
+  {id:'leaf',    lbl:'Листок',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>'},
+  {id:'anchor',  lbl:'Якорь',     svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>'},
+  {id:'sun',     lbl:'Солнце',    svg:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'},
+];
+
+const AVATAR_EMOJIS = ['🌍','🗺️','🏔️','🏕️','⛵','🚀','🌊','🏝️','🌋','🧭','🎯','🏆','💎','⚡','🔥','🌿','⚓','☀️','🌙','❄️','🎪','🎭','🎨','🦅','🐉'];
+
+const AVATAR_COLORS_PRESET = [
+  {id:'blue',    c1:'#4285f4',c2:'#1a73e8'},
+  {id:'indigo',  c1:'#5c6bc0',c2:'#3949ab'},
+  {id:'violet',  c1:'#7c4dff',c2:'#5e35b1'},
+  {id:'pink',    c1:'#e91e8c',c2:'#c2185b'},
+  {id:'red',     c1:'#e53935',c2:'#b71c1c'},
+  {id:'orange',  c1:'#fb8c00',c2:'#e65100'},
+  {id:'amber',   c1:'#ffb300',c2:'#ff8f00'},
+  {id:'gold',    c1:'#f9a825',c2:'#f57f17'},
+  {id:'green',   c1:'#43a047',c2:'#2e7d32'},
+  {id:'teal',    c1:'#00897b',c2:'#00695c'},
+  {id:'cyan',    c1:'#00acc1',c2:'#00838f'},
+  {id:'sky',     c1:'#039be5',c2:'#0277bd'},
+  {id:'slate',   c1:'#546e7a',c2:'#263238'},
+  {id:'brown',   c1:'#6d4c41',c2:'#3e2723'},
+  {id:'black',   c1:'#37474f',c2:'#000000'},
+  {id:'silver',  c1:'#90a4ae',c2:'#607d8b'},
+  {id:'crimson', c1:'#c62828',c2:'#7f0000'},
+  {id:'lime',    c1:'#aed800',c2:'#689f38'},
+  {id:'mint',    c1:'#00c853',c2:'#00796b'},
+  {id:'aurora',  c1:'#9c27b0',c2:'#4caf50'},
+];
+
+function loadProfile(){
+  try{const p=JSON.parse(localStorage.getItem(PK));if(p)return p;}catch{}
+  return{avatarId:'person',avatarType:'svg',customSym:'',color1:'#4285f4',color2:'#1a73e8',name:'',username:'',_uid:''};
+}
+function saveProfile(p){try{localStorage.setItem(PK,JSON.stringify(p));}catch{}}
+let PROFILE = loadProfile();
+
+function getAvatarContent(){
+  if((PROFILE.avatarType==='custom'||PROFILE.avatarType==='emoji')&&PROFILE.customSym)
+    return '<span style="font-size:'+(PROFILE.avatarType==='emoji'?'24':'26')+'px;line-height:1">'+PROFILE.customSym+'</span>';
+  return AVATARS.find(a=>a.id===PROFILE.avatarId)?.svg || AVATARS[0].svg;
+}
+function getAvatarGradient(){
+  return 'linear-gradient(135deg,'+(PROFILE.color1||'#4285f4')+' 0%,'+(PROFILE.color2||'#1a73e8')+' 100%)';
+}
+function applyProfileToUI(){
+  const ico=document.getElementById('gpAvatarIcon');
+  if(ico)ico.innerHTML=getAvatarContent();
+  const hero=document.querySelector('.gp-hero');
+  if(hero)hero.style.background=getAvatarGradient();
+  const nameEl=document.getElementById('gpLevelName');
+  if(nameEl&&PROFILE.name)nameEl.textContent=PROFILE.name;
+  const sub=document.getElementById('gpUsernameSub');
+  if(sub)sub.textContent=PROFILE.username?('@'+PROFILE.username):'';
+}
+
+/* == AVATAR PICKER == */
+function openAvatarPicker(){
+  buildApGrid();buildApEmoji();buildApColors();initColorPicker();syncProfileTab();
+  document.getElementById('avatarPicker').classList.add('show');
+  document.getElementById('avatarPickerOverlay').classList.add('show');
+}
+function closeAvatarPicker(){
+  document.getElementById('avatarPicker').classList.remove('show');
+  document.getElementById('avatarPickerOverlay').classList.remove('show');
+}
+document.getElementById('gpAvatarBig').addEventListener('click',openAvatarPicker);
+document.getElementById('apClose').addEventListener('click',closeAvatarPicker);
+document.getElementById('avatarPickerOverlay').addEventListener('click',closeAvatarPicker);
+
+document.querySelectorAll('.ap-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.ap-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.ap-tab-panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    var tname=tab.dataset.tab;
+    document.getElementById('apTab'+tname.charAt(0).toUpperCase()+tname.slice(1)).classList.add('active');
+    if(tname==='color')setTimeout(drawColorCanvas,50);
+  });
+});
+
+function buildApGrid(){
+  var grid=document.getElementById('apGrid');
+  grid.innerHTML=AVATARS.map(function(a){
+    var sel=PROFILE.avatarType==='svg'&&PROFILE.avatarId===a.id;
+    return '<div class="ap-item'+(sel?' selected':'')+'" data-ava="'+a.id+'" data-type="svg">'+a.svg+'<div class="ap-item-lbl">'+a.lbl+'</div></div>';
+  }).join('');
+  grid.querySelectorAll('.ap-item').forEach(function(el){
+    el.addEventListener('click',function(){
+      PROFILE.avatarType='svg';PROFILE.avatarId=el.dataset.ava;PROFILE.customSym='';saveProfile(PROFILE);
+      clearAllAvaSelections();el.classList.add('selected');applyProfileToUI();
+    });
+  });
+}
+
+function buildApEmoji(){
+  var grid=document.getElementById('apEmojiGrid');
+  grid.innerHTML=AVATAR_EMOJIS.map(function(e){
+    var sel=PROFILE.avatarType==='emoji'&&PROFILE.customSym===e;
+    return '<div class="ap-item'+(sel?' selected':'')+'" data-emoji="'+e+'"><span class="ap-item-emoji">'+e+'</span></div>';
+  }).join('');
+  grid.querySelectorAll('.ap-item').forEach(function(el){
+    el.addEventListener('click',function(){
+      PROFILE.avatarType='emoji';PROFILE.customSym=el.dataset.emoji;saveProfile(PROFILE);
+      clearAllAvaSelections();el.classList.add('selected');applyProfileToUI();
+    });
+  });
+}
+
+function clearAllAvaSelections(){
+  document.getElementById('apGrid').querySelectorAll('.ap-item').forEach(function(x){x.classList.remove('selected');});
+  document.getElementById('apEmojiGrid').querySelectorAll('.ap-item').forEach(function(x){x.classList.remove('selected');});
+  var ci=document.getElementById('apCustomSymInput');if(ci)ci.classList.remove('selected');
+}
+
+(function(){
+  var inp=document.getElementById('apCustomSymInput');
+  if(!inp)return;
+  if(PROFILE.avatarType==='custom'&&PROFILE.customSym)inp.value=PROFILE.customSym;
+  inp.addEventListener('input',function(){
+    var chars=[...inp.value];var v=chars.length>0?chars[chars.length-1]:'';
+    inp.value=v;
+    if(!v)return;
+    PROFILE.avatarType='custom';PROFILE.customSym=v;saveProfile(PROFILE);
+    clearAllAvaSelections();inp.classList.add('selected');applyProfileToUI();
+  });
+})();
+
+function buildApColors(){
+  var wrap=document.getElementById('apColors');
+  wrap.innerHTML=AVATAR_COLORS_PRESET.map(function(c){
+    var sel=PROFILE.color1===c.c1&&PROFILE.color2===c.c2;
+    return '<div class="ap-color'+(sel?' selected':'')+'" data-c1="'+c.c1+'" data-c2="'+c.c2+'" style="background:linear-gradient(135deg,'+c.c1+','+c.c2+')" title="'+c.id+'"></div>';
+  }).join('');
+  wrap.querySelectorAll('.ap-color').forEach(function(el){
+    el.addEventListener('click',function(){
+      PROFILE.color1=el.dataset.c1;PROFILE.color2=el.dataset.c2;saveProfile(PROFILE);
+      wrap.querySelectorAll('.ap-color').forEach(function(x){x.classList.remove('selected');});
+      el.classList.add('selected');applyProfileToUI();updateGradSwatches();
+      var h1=hexToHsv(PROFILE.color1);cpHue=h1[0];cpSat=h1[1];cpVal=h1[2];
+      document.getElementById('apHueSlider').value=cpHue;
+      drawColorCanvas();
+    });
+  });
+}
+
+/* == COLOR PICKER == */
+var cpHue=220,cpSat=0.7,cpVal=0.9,cpEditingSlot=1;
+
+function hsvToRgb(h,s,v){
+  var r,g,b,i=Math.floor(h/60)%6,f=h/60-Math.floor(h/60),p=v*(1-s),q=v*(1-f*s),t=v*(1-s*(1-f));
+  if(i===0){r=v;g=t;b=p;}else if(i===1){r=q;g=v;b=p;}else if(i===2){r=p;g=v;b=t;}else if(i===3){r=p;g=q;b=v;}else if(i===4){r=t;g=p;b=v;}else{r=v;g=p;b=q;}
+  return[Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(function(x){return x.toString(16).padStart(2,'0');}).join('');}
+function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)]:null;}
+function hexToHsv(hex){
+  var rgb=hexToRgb(hex);if(!rgb)return[0,0,1];
+  var r=rgb[0]/255,g=rgb[1]/255,b=rgb[2]/255,max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min,h=0;
+  if(d){if(max===r)h=((g-b)/d)%6;else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=Math.round(h*60);if(h<0)h+=360;}
+  return[h,max===0?0:d/max,max];
+}
+
+function drawColorCanvas(){
+  var canvas=document.getElementById('apColorCanvas');if(!canvas)return;
+  var ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  var hslStr='hsl('+cpHue+',100%,50%)';
+  var g1=ctx.createLinearGradient(0,0,w,0);g1.addColorStop(0,'#fff');g1.addColorStop(1,hslStr);
+  ctx.fillStyle=g1;ctx.fillRect(0,0,w,h);
+  var g2=ctx.createLinearGradient(0,0,0,h);g2.addColorStop(0,'rgba(0,0,0,0)');g2.addColorStop(1,'#000');
+  ctx.fillStyle=g2;ctx.fillRect(0,0,w,h);
+  var cursor=document.getElementById('apCpCursor');
+  if(cursor){cursor.style.left=(cpSat*w)+'px';cursor.style.top=((1-cpVal)*h)+'px';}
+  updateCpPreview();
+}
+function updateCpPreview(){
+  var rgb=hsvToRgb(cpHue,cpSat,cpVal),hex=rgbToHex(rgb[0],rgb[1],rgb[2]);
+  var pb=document.getElementById('apCpPreviewBox'),hi=document.getElementById('apHexInput1');
+  if(pb)pb.style.background=hex;
+  if(hi&&document.activeElement!==hi)hi.value=hex;
+}
+function setActiveColor(hex){
+  if(cpEditingSlot===1)PROFILE.color1=hex;else PROFILE.color2=hex;
+  saveProfile(PROFILE);applyProfileToUI();updateGradSwatches();
+  document.getElementById('apColors').querySelectorAll('.ap-color').forEach(function(x){x.classList.remove('selected');});
+}
+function updateGradSwatches(){
+  var s1=document.getElementById('apGradSwatch1'),s2=document.getElementById('apGradSwatch2'),pv=document.getElementById('apGradPreview');
+  if(s1)s1.style.background=PROFILE.color1||'#4285f4';
+  if(s2)s2.style.background=PROFILE.color2||'#1a73e8';
+  if(pv)pv.style.background='linear-gradient(90deg,'+(PROFILE.color1||'#4285f4')+','+(PROFILE.color2||'#1a73e8')+')';
+}
+
+function initColorPicker(){
+  var canvas=document.getElementById('apColorCanvas');if(!canvas||canvas._cpInit)return;
+  canvas._cpInit=true;
+  var hex1=cpEditingSlot===1?(PROFILE.color1||'#4285f4'):(PROFILE.color2||'#1a73e8');
+  var hsv=hexToHsv(hex1);cpHue=hsv[0];cpSat=hsv[1];cpVal=hsv[2];
+  document.getElementById('apHueSlider').value=cpHue;
+  updateGradSwatches();drawColorCanvas();
+  var dragging=false;
+  function pick(e){
+    var rect=canvas.getBoundingClientRect(),sx=canvas.width/rect.width,sy=canvas.height/rect.height;
+    var cx=e.touches?e.touches[0].clientX:e.clientX,cy=e.touches?e.touches[0].clientY:e.clientY;
+    cpSat=Math.max(0,Math.min(1,(cx-rect.left)*sx/canvas.width));
+    cpVal=Math.max(0,Math.min(1,1-(cy-rect.top)*sy/canvas.height));
+    var rgb=hsvToRgb(cpHue,cpSat,cpVal);setActiveColor(rgbToHex(rgb[0],rgb[1],rgb[2]));drawColorCanvas();
+  }
+  canvas.addEventListener('mousedown',function(e){dragging=true;pick(e);});
+  canvas.addEventListener('touchstart',function(e){dragging=true;e.preventDefault();pick(e);},{passive:false});
+  window.addEventListener('mousemove',function(e){if(dragging)pick(e);});
+  window.addEventListener('mouseup',function(){dragging=false;});
+  window.addEventListener('touchmove',function(e){if(dragging){e.preventDefault();pick(e);}},{passive:false});
+  window.addEventListener('touchend',function(){dragging=false;});
+  document.getElementById('apHueSlider').addEventListener('input',function(){
+    cpHue=+this.value;var rgb=hsvToRgb(cpHue,cpSat,cpVal);setActiveColor(rgbToHex(rgb[0],rgb[1],rgb[2]));drawColorCanvas();
+  });
+  document.getElementById('apHexApply1').addEventListener('click',function(){
+    var hex=document.getElementById('apHexInput1').value.trim();
+    if(/^#[0-9a-f]{6}$/i.test(hex)){var hsv2=hexToHsv(hex);cpHue=hsv2[0];cpSat=hsv2[1];cpVal=hsv2[2];document.getElementById('apHueSlider').value=cpHue;setActiveColor(hex);drawColorCanvas();}
+  });
+  document.getElementById('apHexInput1').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('apHexApply1').click();});
+  document.getElementById('apGradSwatch1').addEventListener('click',function(){
+    cpEditingSlot=1;var h=hexToHsv(PROFILE.color1||'#4285f4');cpHue=h[0];cpSat=h[1];cpVal=h[2];
+    document.getElementById('apHueSlider').value=cpHue;
+    document.getElementById('apGradSwatch1').classList.add('active');document.getElementById('apGradSwatch2').classList.remove('active');
+    drawColorCanvas();
+  });
+  document.getElementById('apGradSwatch2').addEventListener('click',function(){
+    cpEditingSlot=2;var h=hexToHsv(PROFILE.color2||'#1a73e8');cpHue=h[0];cpSat=h[1];cpVal=h[2];
+    document.getElementById('apHueSlider').value=cpHue;
+    document.getElementById('apGradSwatch2').classList.add('active');document.getElementById('apGradSwatch1').classList.remove('active');
+    drawColorCanvas();
+  });
+}
+
+/* == PROFILE TAB == */
+function syncProfileTab(){
+  var ni=document.getElementById('apNicknameInput'),ui=document.getElementById('apUsernameInput');
+  if(ni)ni.value=PROFILE.name||'';
+  if(ui)ui.value=PROFILE.username||'';
+}
+function validateUsername(val){
+  if(!val)return{ok:true,msg:'Оставьте пустым или введите username'};
+  if(!/^[a-zA-Z0-9_]{3,20}$/.test(val))return{ok:false,msg:'3–20 символов: буквы, цифры, _'};
+  var stored=JSON.parse(localStorage.getItem('geogo_usernames')||'{}');
+  if(!PROFILE._uid)PROFILE._uid=Math.random().toString(36).slice(2);
+  var takenBy=stored[val.toLowerCase()];
+  if(takenBy&&takenBy!==PROFILE._uid)return{ok:false,msg:'Этот username уже занят'};
+  return{ok:true,msg:'@'+val+' доступен ✓'};
+}
+(function(){
+  var ui=document.getElementById('apUsernameInput'),hint=document.getElementById('apUsernameHint');
+  if(!ui)return;
+  ui.addEventListener('input',function(){
+    var v=ui.value.replace(/[^a-zA-Z0-9_]/g,'');ui.value=v;
+    var res=validateUsername(v);
+    hint.textContent=res.msg;hint.className='ap-field-hint '+(v?(res.ok?'ok':'err'):'');
+  });
+})();
+document.getElementById('apProfileSave').addEventListener('click',function(){
+  var ni=document.getElementById('apNicknameInput'),ui=document.getElementById('apUsernameInput');
+  var nick=ni.value.trim().slice(0,20),uname=ui.value.trim();
+  if(uname){
+    var res=validateUsername(uname);
+    if(!res.ok){toast(res.msg,'err');return;}
+    var stored=JSON.parse(localStorage.getItem('geogo_usernames')||'{}');
+    if(!PROFILE._uid)PROFILE._uid=Math.random().toString(36).slice(2);
+    if(PROFILE.username&&PROFILE.username!==uname)delete stored[PROFILE.username.toLowerCase()];
+    stored[uname.toLowerCase()]=PROFILE._uid;
+    localStorage.setItem('geogo_usernames',JSON.stringify(stored));
+  }
+  if(nick)PROFILE.name=nick;
+  if(uname)PROFILE.username=uname;
+  saveProfile(PROFILE);applyProfileToUI();toast('Профиль сохранён ✓','ok');
+});
+
+(function(){
+  var nameEl=document.getElementById('gpLevelName');
+  var nameInput=document.getElementById('gpNameInput');
+  var editBtn=document.getElementById('gpNameEditBtn');
+  function startEdit(){nameEl.style.display='none';editBtn.style.display='none';nameInput.style.display='block';nameInput.value=PROFILE.name||'';nameInput.focus();nameInput.select();}
+  function finishEdit(){var v=nameInput.value.trim().slice(0,20);if(v){PROFILE.name=v;saveProfile(PROFILE);}nameInput.style.display='none';nameEl.style.display='';editBtn.style.display='';applyProfileToUI();}
+  editBtn.addEventListener('click',startEdit);
+  nameEl.addEventListener('dblclick',startEdit);
+  nameInput.addEventListener('blur',finishEdit);
+  nameInput.addEventListener('keydown',function(e){if(e.key==='Enter')finishEdit();if(e.key==='Escape'){nameInput.style.display='none';nameEl.style.display='';editBtn.style.display='';}});
+})();
+
+const LEVELS = [
+  {min:0,name:'Новичок'},{min:100,name:'Путешественник'},{min:300,name:'Исследователь'},
+  {min:600,name:'Навигатор'},{min:1000,name:'Картограф'},{min:1500,name:'Географ'},
+  {min:2200,name:'Первооткрыватель'},{min:3000,name:'Легенда карты'},{min:4000,name:'Мастер маршрутов'},{min:5500,name:'Гений GeoGo'},
+];
+function getLevel(xp){let lv=1;for(let i=0;i<LEVELS.length;i++){if(xp>=LEVELS[i].min)lv=i+1;}return lv;}
+function getLevelName(lv){return LEVELS[Math.min(lv-1,LEVELS.length-1)].name;}
+function xpForLevel(lv){return LEVELS[Math.min(lv,LEVELS.length-1)]?.min ?? 9999;}
+function xpProgress(xp){const lv=getLevel(xp);const cur=LEVELS[lv-1].min;const nxt=xpForLevel(lv);if(nxt===9999)return 100;return Math.min(100,Math.round((xp-cur)/(nxt-cur)*100));}
+
+const ACHIEVEMENTS = [
+  {id:'pin1',   name:'Первая метка',   desc:'Поставьте 1 метку',       max:1,  key:'pins',    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',xp:25},
+  {id:'pin10',  name:'Коллекционер',   desc:'Поставьте 10 меток',      max:10, key:'pins',    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',xp:50},
+  {id:'route1', name:'Первый маршрут', desc:'Постройте 1 маршрут',     max:1,  key:'routes',  ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',xp:30},
+  {id:'route5', name:'Штурман',        desc:'Постройте 5 маршрутов',   max:5,  key:'routes',  ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',xp:75},
+  {id:'wiki1',  name:'Эрудит',         desc:'Откройте 1 статью',       max:1,  key:'wiki',    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',xp:20},
+  {id:'wiki10', name:'Библиотекарь',   desc:'Откройте 10 статей',      max:10, key:'wiki',    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',xp:60},
+  {id:'random5',name:'Авантюрист',     desc:'5 случайных мест',        max:5,  key:'random',  ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>',xp:40},
+  {id:'streak3',name:'Верность',       desc:'3 дня подряд',            max:3,  key:'streak',  ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',xp:80},
+  {id:'search5',name:'Поисковик',      desc:'5 поисковых запросов',    max:5,  key:'searches',ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',xp:35},
+  {id:'ruler1', name:'Измеритель',     desc:'Используйте линейку',     max:1,  key:'ruler',   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12"/><polyline points="6 8 2 12 6 16"/><polyline points="18 8 22 12 18 16"/></svg>',xp:20},
+  {id:'layer1', name:'Аналитик',       desc:'Включите слой карты',     max:1,  key:'layers',  ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',xp:15},
+];
+
+const DAILY_CHALLENGES = [
+  {id:'d_pin',   name:'Добавить метку',    desc:'Поставьте хотя бы 1 метку',   key:'pins',   goal:1,xp:20,ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'},
+  {id:'d_route', name:'Построить маршрут', desc:'Постройте хотя бы 1 маршрут', key:'routes', goal:1,xp:25,ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'},
+  {id:'d_wiki',  name:'Прочитать статью',  desc:'Откройте статью Википедии',   key:'wiki',   goal:1,xp:15,ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'},
+  {id:'d_random',name:'Случайное место',   desc:'Нажмите «Случайное место»',   key:'random', goal:1,xp:10,ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>'},
+];
+
+function loadGame(){try{return JSON.parse(localStorage.getItem(GK))||newGame();}catch{return newGame();}}
+function newGame(){return{xp:0,pins:0,routes:0,wiki:0,random:0,searches:0,ruler:0,layers:0,streak:0,bestStreak:0,lastActiveDate:'',unlocked:[],daily:{date:'',done:[]},stats:{xpTotal:0}};}
+function saveGame(g){try{localStorage.setItem(GK,JSON.stringify(g));}catch{}}
+let G = loadGame();
+
+function touchStreak(){
+  const today=new Date().toDateString();
+  if(G.lastActiveDate===today)return;
+  const yesterday=new Date(Date.now()-86400000).toDateString();
+  if(G.lastActiveDate===yesterday){G.streak++;}else{G.streak=1;}
+  if(G.streak>G.bestStreak)G.bestStreak=G.streak;
+  G.lastActiveDate=today;saveGame(G);checkAchievement('streak3',G.streak);
+}
+
+function ensureDailyReset(){
+  const today=new Date().toDateString();
+  if(G.daily.date!==today){G.daily={date:today,done:[],progress:{}};}
+}
+
+function gainXP(amount,x,y){
+  const oldLevel=getLevel(G.xp);G.xp+=amount;G.stats.xpTotal=(G.stats.xpTotal||0)+amount;saveGame(G);updateUI();spawnXPPop(amount,x,y);
+  const newLevel=getLevel(G.xp);if(newLevel>oldLevel)showLevelUp(newLevel);
+}
+
+function spawnXPPop(amount,x,y){
+  if(!x)x=window.innerWidth/2;if(!y)y=80;
+  const el=document.createElement('div');el.className='xp-pop';el.textContent='+'+amount+' XP';el.style.left=x+'px';el.style.top=y+'px';document.body.appendChild(el);setTimeout(()=>el.remove(),1500);
+}
+
+function checkAchievement(id,val){
+  if(G.unlocked.includes(id))return;
+  const ach=ACHIEVEMENTS.find(a=>a.id===id);if(!ach)return;
+  if(val>=ach.max){G.unlocked.push(id);saveGame(G);gainXP(ach.xp);showAchievementToast(ach);renderGamePanel();}
+}
+
+function checkAllAchievements(){
+  checkAchievement('pin1',G.pins);checkAchievement('pin10',G.pins);
+  checkAchievement('route1',G.routes);checkAchievement('route5',G.routes);
+  checkAchievement('wiki1',G.wiki);checkAchievement('wiki10',G.wiki);
+  checkAchievement('random5',G.random);checkAchievement('streak3',G.streak);
+  checkAchievement('search5',G.searches);checkAchievement('ruler1',G.ruler);checkAchievement('layer1',G.layers);
+}
+
+let achToastTimer;
+function showAchievementToast(ach){
+  const t=document.getElementById('achToast');
+  document.getElementById('achToastIco').innerHTML=ach.ico;
+  document.getElementById('achToastName').textContent=ach.name;
+  t.classList.add('show');clearTimeout(achToastTimer);achToastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+let luTimer;
+function showLevelUp(lv){
+  const o=document.getElementById('levelUpOverlay');
+  document.getElementById('luLevel').textContent=lv;
+  document.getElementById('luName').textContent=getLevelName(lv);
+  const p=document.getElementById('luParticles');p.innerHTML='';
+  for(let i=0;i<18;i++){const d=document.createElement('div');d.className='lu-particle';d.style.left=Math.random()*100+'%';d.style.top=Math.random()*60+'%';d.style.animationDelay=Math.random()*0.6+'s';d.style.background=i%3===0?'#4285f4':i%3===1?'#1a73e8':'#7ab3f8';p.appendChild(d);}
+  o.classList.add('show');clearTimeout(luTimer);luTimer=setTimeout(()=>o.classList.remove('show'),3000);
+}
+
+function trackDaily(key,amount=1){
+  ensureDailyReset();if(!G.daily.progress)G.daily.progress={};
+  G.daily.progress[key]=(G.daily.progress[key]||0)+amount;
+  DAILY_CHALLENGES.forEach(ch=>{
+    if(ch.key!==key)return;if(G.daily.done.includes(ch.id))return;
+    const prog=G.daily.progress[key]||0;
+    if(prog>=ch.goal){G.daily.done.push(ch.id);saveGame(G);gainXP(ch.xp);toast('Задание выполнено: '+ch.name,'ok');}
+  });saveGame(G);renderChallenges();
+}
+
+function updateUI(){
+  const lv=getLevel(G.xp);const name=getLevelName(lv);const pct=xpProgress(G.xp);
+  document.getElementById('gpLevelName').textContent=name;
+  document.getElementById('gpLevelSub').textContent='Уровень '+lv;
+  document.getElementById('gpLvlBig').textContent='Ур. '+lv;
+  const nxt=xpForLevel(lv);
+  document.getElementById('gpXpLabel').textContent=G.xp+' / '+(nxt===9999?'MAX':nxt)+' XP';
+  document.getElementById('gpXpFill').style.width=pct+'%';
+  document.getElementById('statPins').textContent=G.pins;
+  document.getElementById('statRoutes').textContent=G.routes;
+  document.getElementById('statWiki').textContent=G.wiki;
+  document.getElementById('statXpTotal').textContent=G.stats.xpTotal||G.xp;
+  document.getElementById('streakVal').textContent=G.streak;
+  document.getElementById('streakBest').textContent='Рекорд: '+G.bestStreak+' дн.';
+}
+
+function renderAchievements(){
+  const grid=document.getElementById('achGrid');
+  grid.innerHTML=ACHIEVEMENTS.map(a=>{
+    const unlocked=G.unlocked.includes(a.id);const val=Math.min(G[a.key]||0,a.max);const pct=Math.round(val/a.max*100);
+    return`<div class="gp-ach ${unlocked?'unlocked':'locked'}"><div class="gp-ach-ico">${a.ico}</div><div class="gp-ach-name">${a.name}</div><div class="gp-ach-desc">${a.desc}</div><div class="gp-ach-prog"><div class="gp-ach-prog-fill" style="width:${pct}%"></div></div><div class="gp-ach-pct">${unlocked?'Выполнено':val+' / '+a.max}</div></div>`;
+  }).join('');
+}
+
+function renderChallenges(){
+  ensureDailyReset();const list=document.getElementById('challengesList');
+  list.innerHTML=DAILY_CHALLENGES.map(ch=>{
+    const done=G.daily.done.includes(ch.id);
+    return`<div class="gp-challenge ${done?'done':''}"><div class="gp-ch-ico">${ch.ico}</div><div class="gp-ch-info"><div class="gp-ch-name">${ch.name}</div><div class="gp-ch-sub">${ch.desc}</div></div><div class="gp-ch-xp">+${ch.xp} XP</div><div class="gp-ch-check">${done?`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`:`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`}</div></div>`;
+  }).join('');
+}
+
+function renderGamePanel(){updateUI();renderAchievements();renderChallenges();}
+
+document.getElementById('xpBadge').addEventListener('click',()=>{
+  document.getElementById('gamePanel').classList.add('open');
+  document.getElementById('gameOverlay').classList.add('show');
+  renderGamePanel();applyProfileToUI();
+});
+document.getElementById('gpClose').addEventListener('click',()=>{
+  document.getElementById('gamePanel').classList.remove('open');
+  document.getElementById('gameOverlay').classList.remove('show');
+});
+document.getElementById('gameOverlay').addEventListener('click',()=>{
+  document.getElementById('gamePanel').classList.remove('open');
+  document.getElementById('gameOverlay').classList.remove('show');
+});
+
+touchStreak();updateUI();applyProfileToUI();
+
+/* MAP LAYERS */
+const menuBtn=document.getElementById('menuBtn'),mapMenu=document.getElementById('mapMenu');
+menuBtn.addEventListener('click',e=>{e.stopPropagation();const o=mapMenu.classList.toggle('open');menuBtn.classList.toggle('open',o);});
+document.addEventListener('click',e=>{if(!menuBtn.contains(e.target)&&!mapMenu.contains(e.target)){mapMenu.classList.remove('open');menuBtn.classList.remove('open');}});
+
+const TL_BASE={
+  light:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
+  dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}),
+  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
+  hyb:L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{opacity:.85})])
+};
+const TL_OV={
+  traffic:L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',{opacity:.5,attribution:'© OpenStreetMap France',maxZoom:20,subdomains:'abc'}),
+  weather:L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02',{opacity:.65,attribution:'© OpenWeatherMap',maxZoom:18}),
+  bike:L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',{opacity:.85,attribution:'© CyclOSM',maxZoom:17,subdomains:'abc'}),
+  terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{opacity:.45,attribution:'© OpenTopoMap',maxZoom:17,subdomains:'abc'}),
+  rail:L.tileLayer('https://a.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',{opacity:.9,attribution:'© OpenRailwayMap',maxZoom:19}),
+  hike:L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',{opacity:.85,attribution:'© Waymarked Trails',maxZoom:19})
+};
+let curTheme='light'; TL_BASE.light.addTo(map);
+const activeOV=new Set();
+document.querySelectorAll('.mbase-btn').forEach(btn=>{btn.addEventListener('click',()=>{const t=btn.dataset.t;if(t===curTheme)return;const old=TL_BASE[curTheme];if(old instanceof L.LayerGroup)old.eachLayer(l=>map.removeLayer(l));else map.removeLayer(old);TL_BASE[t].addTo(map);activeOV.forEach(id=>{if(TL_OV[id]&&map.hasLayer(TL_OV[id])){map.removeLayer(TL_OV[id]);TL_OV[id].addTo(map);}});if(locM)locM.addTo(map);if(accC)accC.addTo(map);document.querySelectorAll('.mbase-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');curTheme=t;});});
+const OV_MAP={'layTraffic':'traffic','layWeather':'weather','layBike':'bike','layTerrain':'terrain','layRail':'rail','layHike':'hike'};
+Object.entries(OV_MAP).forEach(([btnId,ovId])=>{const btn=document.getElementById(btnId);if(!btn)return;btn.addEventListener('click',e=>{e.stopPropagation();const on=btn.classList.toggle('on');if(on){TL_OV[ovId].addTo(map);activeOV.add(ovId);toast(btn.querySelector('.mlay-name').textContent+' включён','ok');G.layers=(G.layers||0)+1;saveGame(G);gainXP(5);trackDaily('layers');checkAchievement('layer1',G.layers);}else{map.removeLayer(TL_OV[ovId]);activeOV.delete(ovId);toast(btn.querySelector('.mlay-name').textContent+' выключен');}});});
+
+let toastT;
+function toast(txt,cls){const el=document.getElementById('toast');el.textContent=txt;el.className='show'+(cls?' '+cls:'');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2600);}
+
+let locM=null,accC=null;
+function locate(){if(!navigator.geolocation){toast('Геолокация не поддерживается','err');return;}const btn=document.getElementById('locBtn');btn.classList.add('active');navigator.geolocation.getCurrentPosition(pos=>{btn.classList.remove('active');const{latitude:lat,longitude:lng,accuracy:acc}=pos.coords;map.setView([lat,lng],16,{animate:true});if(locM)map.removeLayer(locM);if(accC)map.removeLayer(accC);accC=L.circle([lat,lng],{radius:acc,color:'#4285f4',weight:1.5,opacity:.35,fillColor:'#4285f4',fillOpacity:.06}).addTo(map);locM=L.marker([lat,lng],{icon:L.divIcon({className:'udot',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map).bindPopup('<b>Ты здесь</b><br><small style="color:#9aa0a6">Точность: '+Math.round(acc)+' м</small>');toast('Точность: '+Math.round(acc)+' м','ok');},err=>{document.getElementById('locBtn').classList.remove('active');toast(err.code===1?'Нужен доступ к геолокации':'Ошибка геолокации','err');},{enableHighAccuracy:true,timeout:10000});}
+document.getElementById('locBtn').addEventListener('click',locate);
+document.getElementById('shareBtn').addEventListener('click',()=>{const c=map.getCenter();const url=`${location.origin}${location.pathname}#${c.lat.toFixed(5)},${c.lng.toFixed(5)},${map.getZoom()}`;navigator.clipboard.writeText(url).then(()=>toast('Ссылка скопирована','ok')).catch(()=>toast('Ошибка копирования','err'));});
+(function(){const h=location.hash.slice(1).split(',');if(h.length===3&&!isNaN(h[0]))map.setView([+h[0],+h[1]],+h[2]);})();
+
+const LAND_BOXES=[{n:71,s:36,w:-10,e:40},{n:72,s:50,w:40,e:180},{n:38,s:15,w:-18,e:55},{n:15,s:-35,w:-18,e:52},{n:42,s:12,w:26,e:63},{n:38,s:5,w:60,e:100},{n:55,s:18,w:100,e:145},{n:28,s:-10,w:92,e:141},{n:72,s:15,w:-168,e:-52},{n:22,s:7,w:-92,e:-77},{n:13,s:-56,w:-82,e:-34},{n:-10,s:-44,w:113,e:154}];
+function randomLandPoint(){const areas=LAND_BOXES.map(b=>(b.n-b.s)*(b.e-b.w));const total=areas.reduce((a,b)=>a+b,0);let r=Math.random()*total,box=LAND_BOXES[0];for(let i=0;i<LAND_BOXES.length;i++){r-=areas[i];if(r<=0){box=LAND_BOXES[i];break;}}return{lat:box.s+Math.random()*(box.n-box.s),lon:box.w+Math.random()*(box.e-box.w)};}
+document.getElementById('randomBtn').addEventListener('click',()=>{
+  const{lat,lon}=randomLandPoint();
+  const btn=document.getElementById('randomBtn');btn.classList.add('spinning');setTimeout(()=>btn.classList.remove('spinning'),450);
+  map.setView([lat,lon],6,{animate:true,duration:1.2});
+  const latStr=lat>=0?lat.toFixed(2)+'° с.ш.':Math.abs(lat).toFixed(2)+'° ю.ш.';
+  const lonStr=lon>=0?lon.toFixed(2)+'° в.д.':Math.abs(lon).toFixed(2)+'° з.д.';
+  toast(latStr+', '+lonStr,'ok');
+  G.random=(G.random||0)+1;saveGame(G);gainXP(8);touchStreak();trackDaily('random');checkAchievement('random5',G.random);
+});
+
+/* ROUTES */
+const routeBtn=document.getElementById('routeBtn'),routeSheet=document.getElementById('routeSheet'),rsClose=document.getElementById('routeSheetClose'),rsStartLbl=document.getElementById('rsStartLbl'),rsEndLbl=document.getElementById('rsEndLbl'),rsStartClr=document.getElementById('rsStartClr'),rsEndClr=document.getElementById('rsEndClr'),rsResult=document.getElementById('rsResult'),rsIcon=document.getElementById('rsIcon'),rsTime=document.getElementById('rsTime'),rsSub=document.getElementById('rsSub'),rsDist=document.getElementById('rsDist'),routeChip=document.getElementById('routeChip');
+let routeActive=false,routeStep=null,rStart=null,rEnd=null,rStartM=null,rEndM=null,rPolylines={},rMode='driving',rAborts={},rData={};
+const RICONS={driving:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,cycling:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`,walking:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg>`};
+const RNAMES={driving:'На машине',cycling:'На велосипеде',walking:'Пешком'};
+const RICONS_SM={driving:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,cycling:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`,walking:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg>`};
+function fmtT(s){const m=Math.round(s/60);if(m<1)return'<1м';if(m<60)return m+'мин';const h=Math.floor(m/60),r=m%60;return r>0?`${h}ч ${r}м`:`${h}ч`;}
+function fmtD(m){if(m<1000)return Math.round(m)+' м';if(m<10000)return(m/1000).toFixed(1)+' км';return Math.round(m/1000)+' км';}
+function liftSidebar(yes){sidebar.classList.toggle('lifted',yes);mapMenu.classList.toggle('lifted',yes);}
+function showChip(step){routeChip.classList.remove('show','step-start','step-end');if(!step)return;const ps=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;const pf=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;routeChip.innerHTML=(step==='start'?ps+' Кликните — начало маршрута':pf+' Кликните — конец маршрута');routeChip.className=`route-chip show step-${step}`;clearTimeout(routeChip._t);routeChip._t=setTimeout(()=>routeChip.classList.remove('show'),4000);}
+function openSheet(){routeActive=true;routeBtn.classList.add('on');routeSheet.classList.add('show');liftSidebar(true);document.body.classList.add('route-mode');if(!rStart&&locM){setPoint('start',locM.getLatLng(),'Моё местоположение');}else if(!rStart){routeStep='start';showChip('start');}else if(!rEnd){routeStep='end';showChip('end');}}
+function closeSheet(){routeActive=false;routeBtn.classList.remove('on');routeSheet.classList.remove('show');liftSidebar(false);document.body.classList.remove('route-mode');clearAll();routeStep=null;showChip(null);}
+function clearAll(){if(rStartM){map.removeLayer(rStartM);rStartM=null;}if(rEndM){map.removeLayer(rEndM);rEndM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rStart=rEnd=null;rData={};rsStartLbl.textContent='Откуда...';rsStartLbl.classList.remove('filled');rsStartClr.classList.remove('vis');rsEndLbl.textContent='Куда...';rsEndLbl.classList.remove('filled');rsEndClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});}
+function setPoint(which,latlng,name){const lbl=name||`${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;if(which==='start'){rStart=latlng;rsStartLbl.textContent=lbl;rsStartLbl.classList.add('filled');rsStartClr.classList.add('vis');if(rStartM)map.removeLayer(rStartM);rStartM=L.marker(latlng,{icon:L.divIcon({className:'rm-start',iconSize:[16,16],iconAnchor:[8,8]}),draggable:true,zIndexOffset:700}).addTo(map);rStartM.on('dragend',e=>{rStart=e.target.getLatLng();rsStartLbl.textContent=`${rStart.lat.toFixed(4)}, ${rStart.lng.toFixed(4)}`;if(rEnd)fetchAll();});if(!rEnd){routeStep='end';showChip('end');}}else{rEnd=latlng;rsEndLbl.textContent=lbl;rsEndLbl.classList.add('filled');rsEndClr.classList.add('vis');if(rEndM)map.removeLayer(rEndM);rEndM=L.marker(latlng,{icon:L.divIcon({className:'rm-end',iconSize:[16,16],iconAnchor:[8,8]}),draggable:true,zIndexOffset:700}).addTo(map);rEndM.on('dragend',e=>{rEnd=e.target.getLatLng();rsEndLbl.textContent=`${rEnd.lat.toFixed(4)}, ${rEnd.lng.toFixed(4)}`;fetchAll();});routeStep=null;showChip(null);}if(rStart&&rEnd)fetchAll();}
+async function fetchAll(){if(!rStart||!rEnd)return;Object.values(rAborts).forEach(a=>a&&a.abort());rAborts={};Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rData={};rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='…';el.classList.add('loading');}});
+const URLS={driving:`https://routing.openstreetmap.de/routed-car/route/v1/driving/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`,cycling:`https://routing.openstreetmap.de/routed-bike/route/v1/cycling/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`,walking:`https://routing.openstreetmap.de/routed-foot/route/v1/walking/${rStart.lng},${rStart.lat};${rEnd.lng},${rEnd.lat}?overview=full&geometries=geojson`};
+let routeAwarded=false;
+for(const mode of['driving','cycling','walking']){const ctrl=new AbortController();rAborts[mode]=ctrl;try{const res=await fetch(URLS[mode],{signal:ctrl.signal});const data=await res.json();if(data.routes&&data.routes.length){const r=data.routes[0];rData[mode]={duration:r.duration,distance:r.distance,coords:r.geometry.coordinates.map(c=>[c[1],c[0]])};const el=document.getElementById('tt-'+mode);if(el){el.textContent=fmtT(r.duration);el.classList.remove('loading');}if(!routeAwarded){routeAwarded=true;G.routes=(G.routes||0)+1;saveGame(G);gainXP(15,window.innerWidth/2,200);touchStreak();trackDaily('routes');checkAchievement('route1',G.routes);checkAchievement('route5',G.routes);}}else{const el=document.getElementById('tt-'+mode);if(el){el.textContent='—';el.classList.remove('loading');}}}catch(e){if(e.name!=='AbortError'){const el=document.getElementById('tt-'+mode);if(el){el.textContent='—';el.classList.remove('loading');}}}await new Promise(r=>setTimeout(r,300));}
+showMode(rMode);const bounds=L.latLngBounds([rStart,rEnd]).pad(0.2);map.fitBounds(bounds,{animate:true,duration:.6,paddingBottomRight:[0,240]});}
+function showMode(mode){Object.entries(rPolylines).forEach(([m,p])=>{if(p)p.setStyle({opacity:m===mode?.85:0,weight:m===mode?5:3});});const d=rData[mode];if(!d){rsResult.dataset.mode=mode;rsResult.classList.add('show');rsIcon.innerHTML=RICONS[mode];rsTime.textContent='Нет данных';rsSub.textContent=RNAMES[mode];rsDist.textContent='';return;}if(!rPolylines[mode]){rPolylines[mode]=L.polyline(d.coords,{color:'#4285f4',weight:5,opacity:.85,lineJoin:'round',lineCap:'round'}).addTo(map);rPolylines[mode].bringToBack();}else{rPolylines[mode].setStyle({opacity:.85,weight:5});if(!map.hasLayer(rPolylines[mode]))rPolylines[mode].addTo(map);}rsResult.dataset.mode=mode;rsResult.classList.add('show');rsIcon.innerHTML=RICONS[mode];rsTime.textContent=fmtT(d.duration);rsSub.textContent=RNAMES[mode];rsDist.textContent=fmtD(d.distance);}
+document.querySelectorAll('.rs-tab').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('.rs-tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');rMode=btn.dataset.mode;showMode(rMode);});});
+rsStartClr.addEventListener('click',e=>{e.stopPropagation();if(rStartM){map.removeLayer(rStartM);rStartM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rStart=null;rData={};rsStartLbl.textContent='Откуда...';rsStartLbl.classList.remove('filled');rsStartClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});routeStep='start';showChip('start');});
+rsEndClr.addEventListener('click',e=>{e.stopPropagation();if(rEndM){map.removeLayer(rEndM);rEndM=null;}Object.values(rPolylines).forEach(p=>p&&map.removeLayer(p));rPolylines={};rEnd=null;rData={};rsEndLbl.textContent='Куда...';rsEndLbl.classList.remove('filled');rsEndClr.classList.remove('vis');rsResult.classList.remove('show');['driving','cycling','walking'].forEach(m=>{const el=document.getElementById('tt-'+m);if(el){el.textContent='—';el.classList.remove('loading');}});routeStep='end';showChip('end');});
+routeBtn.addEventListener('click',()=>routeActive?closeSheet():openSheet());
+rsClose.addEventListener('click',closeSheet);
+
+/* SAVE ROUTES */
+const ROUTES_KEY='geogo_routes';
+function loadRoutes(){try{return JSON.parse(localStorage.getItem(ROUTES_KEY))||[];}catch{return[];}}
+function saveRoutes(r){try{localStorage.setItem(ROUTES_KEY,JSON.stringify(r));}catch{}}
+const rsSaveBtn=document.getElementById('rsSaveBtn');
+const saveRouteDialog=document.getElementById('saveRouteDialog');
+const saveRouteOverlay=document.getElementById('saveRouteOverlay');
+const saveRouteNameInput=document.getElementById('saveRouteNameInput');
+const srdCancelBtn=document.getElementById('srdCancelBtn');
+const srdConfirmBtn=document.getElementById('srdConfirmBtn');
+const savedPanel=document.getElementById('savedPanel');
+const savedOverlay=document.getElementById('savedOverlay');
+const savedClose=document.getElementById('savedClose');
+const spBody=document.getElementById('spBody');
+const rsOpenSavedBtn=document.getElementById('rsOpenSavedBtn');
+function openSaveDialog(){if(!rStart||!rEnd){toast('Сначала постройте маршрут','err');return;}let name=(rsStartLbl.textContent!=='Откуда...'&&rsEndLbl.textContent!=='Куда...')?rsStartLbl.textContent.split(',')[0]+' → '+rsEndLbl.textContent.split(',')[0]:'';saveRouteNameInput.value=name.slice(0,40);saveRouteDialog.classList.add('show');saveRouteOverlay.classList.add('show');setTimeout(()=>saveRouteNameInput.focus(),200);}
+function closeSaveDialog(){saveRouteDialog.classList.remove('show');saveRouteOverlay.classList.remove('show');}
+function confirmSaveRoute(){if(!rStart||!rEnd)return;const name=saveRouteNameInput.value.trim()||'Маршрут';const routes=loadRoutes();const d=rData[rMode];routes.unshift({id:Date.now(),name,start:{lat:rStart.lat,lng:rStart.lng,label:rsStartLbl.textContent},end:{lat:rEnd.lat,lng:rEnd.lng,label:rsEndLbl.textContent},mode:rMode,duration:d?d.duration:null,distance:d?d.distance:null,savedAt:new Date().toLocaleDateString('ru',{day:'numeric',month:'short'})});if(routes.length>30)routes.length=30;saveRoutes(routes);closeSaveDialog();rsSaveBtn.classList.add('saved');setTimeout(()=>rsSaveBtn.classList.remove('saved'),2000);toast('Маршрут сохранён','ok');}
+rsSaveBtn.addEventListener('click',openSaveDialog);
+saveRouteOverlay.addEventListener('click',closeSaveDialog);
+srdCancelBtn.addEventListener('click',closeSaveDialog);
+srdConfirmBtn.addEventListener('click',confirmSaveRoute);
+saveRouteNameInput.addEventListener('keydown',e=>{if(e.key==='Enter')confirmSaveRoute();if(e.key==='Escape')closeSaveDialog();});
+function openSavedPanel(){renderSavedPanel();savedPanel.classList.add('open');savedOverlay.classList.add('show');}
+function closeSavedPanel(){savedPanel.classList.remove('open');savedOverlay.classList.remove('show');}
+savedClose.addEventListener('click',closeSavedPanel);
+savedOverlay.addEventListener('click',closeSavedPanel);
+rsOpenSavedBtn.addEventListener('click',openSavedPanel);
+function renderSavedPanel(){const routes=loadRoutes();if(!routes.length){spBody.innerHTML=`<div class="sp-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Сохранённых маршрутов пока нет.<br>Постройте маршрут и нажмите «Сохранить».</div>`;return;}spBody.innerHTML=routes.map((r,i)=>`<div class="sp-item"><div class="sp-item-header"><div class="sp-item-name">${r.name}</div><button class="sp-item-del" data-del="${i}">${ICO_DEL}</button></div><div class="sp-item-points"><div class="sp-pt"><div class="sp-pt-dot s"></div><div class="sp-pt-lbl">${r.start.label}</div></div><div class="sp-pt"><div class="sp-pt-dot e"></div><div class="sp-pt-lbl">${r.end.label}</div></div></div><div class="sp-item-meta"><span class="sp-badge mode">${RICONS_SM[r.mode]||''} ${RNAMES[r.mode]||r.mode}</span>${r.duration?`<span class="sp-badge">${fmtT(r.duration)}</span>`:''}${r.distance?`<span class="sp-badge">${fmtD(r.distance)}</span>`:''}<span class="sp-badge">${r.savedAt}</span></div><button class="sp-item-load" data-load="${i}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>Загрузить маршрут</button></div>`).join('');spBody.querySelectorAll('.sp-item-del').forEach(btn=>{btn.addEventListener('click',e=>{e.stopPropagation();const rs=loadRoutes();rs.splice(+btn.dataset.del,1);saveRoutes(rs);renderSavedPanel();});});spBody.querySelectorAll('.sp-item-load').forEach(btn=>{btn.addEventListener('click',()=>{const r=loadRoutes()[+btn.dataset.load];if(!r)return;closeSavedPanel();if(!routeActive)openSheet();clearAll();rMode=r.mode;document.querySelectorAll('.rs-tab').forEach(t=>t.classList.toggle('on',t.dataset.mode===rMode));setTimeout(()=>{setPoint('start',L.latLng(r.start.lat,r.start.lng),r.start.label);setPoint('end',L.latLng(r.end.lat,r.end.lng),r.end.label);},150);toast('Маршрут загружен','ok');});});}
+
+/* RULER */
+const rulerBtn=document.getElementById('rulerBtn'),rulerHint=document.getElementById('rulerHint'),rulerHintText=document.getElementById('rulerHintText'),rulerDistEl=document.getElementById('rulerDist'),rulerClearBtn=document.getElementById('rulerClearBtn');
+let rulerActive=false,rulerPoints=[],rulerLines=[],rulerLabels=[],rulerPolygon=null,isClosed=false;
+function fmtR(m){return m<1000?Math.round(m)+' м':m<10000?(m/1000).toFixed(2)+' км':Math.round(m/1000)+' км';}
+function fmtA(m2){return m2<10000?Math.round(m2)+' м²':m2<1e6?(m2/10000).toFixed(2)+' га':(m2/1e6).toFixed(2)+' км²';}
+function calcArea(pts){if(pts.length<3)return 0;const R=6371000;let a=0,n=pts.length;for(let i=0;i<n;i++){const j=(i+1)%n,la1=pts[i].lat*Math.PI/180,la2=pts[j].lat*Math.PI/180,dl=(pts[j].lng-pts[i].lng)*Math.PI/180;a+=dl*(2+Math.sin(la1)+Math.sin(la2));}return Math.abs(a*R*R/2);}
+function totalP(){let d=0;for(let i=1;i<rulerPoints.length;i++)d+=rulerPoints[i-1].latlng.distanceTo(rulerPoints[i].latlng);if(isClosed&&rulerPoints.length>2)d+=rulerPoints[rulerPoints.length-1].latlng.distanceTo(rulerPoints[0].latlng);return d;}
+const rSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7ab3f8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="11" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="11" x2="14" y2="13"/><line x1="18" y1="10" x2="18" y2="14"/></svg>';
+const aSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7ab3f8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polygon points="12 2 22 19 2 19"/></svg>';
+function updateRulerUI(){const n=rulerPoints.length;if(n===0){rulerHintText.style.display='';rulerHintText.textContent='Кликните на карту, чтобы начать';rulerDistEl.style.display='none';}else if(n===1){rulerHintText.style.display='';rulerHintText.textContent='Добавьте ещё точку';rulerDistEl.style.display='none';}else if(!isClosed){rulerHintText.style.display='';rulerHintText.textContent=n>=3?'Замкнуть':'';rulerDistEl.style.display='';rulerDistEl.innerHTML=rSvg+' '+fmtR(totalP());}else{rulerHintText.style.display='none';rulerDistEl.style.display='';const area=calcArea(rulerPoints.map(p=>p.latlng));rulerDistEl.innerHTML=rSvg+' '+fmtR(totalP())+'<span style="opacity:.35;margin:0 4px">|</span>'+aSvg+' '+fmtA(area);}}
+function redrawRuler(){rulerLines.forEach(l=>map.removeLayer(l));rulerLabels.forEach(l=>map.removeLayer(l));if(rulerPolygon){map.removeLayer(rulerPolygon);rulerPolygon=null;}rulerLines=[];rulerLabels=[];const pts=rulerPoints.map(p=>p.latlng);if(isClosed&&pts.length>=3){rulerPolygon=L.polygon(pts,{color:'#4285f4',weight:2.5,opacity:.85,dashArray:'6 5',fillColor:'#4285f4',fillOpacity:.1}).addTo(map);}else{for(let i=1;i<rulerPoints.length;i++){const a=pts[i-1],b=pts[i];rulerLines.push(L.polyline([a,b],{color:'#4285f4',weight:3,opacity:.85,dashArray:'6 5'}).addTo(map));const mid=L.latLng((a.lat+b.lat)/2,(a.lng+b.lng)/2);rulerLabels.push(L.marker(mid,{icon:L.divIcon({className:'ruler-label',html:fmtR(a.distanceTo(b)),iconSize:null,iconAnchor:[0,24]}),interactive:false}).addTo(map));}}updateRulerUI();}
+function isNearFirst(ll){if(rulerPoints.length<3)return false;const p1=map.latLngToContainerPoint(rulerPoints[0].latlng),p2=map.latLngToContainerPoint(ll);return p1.distanceTo(p2)<20;}
+function addRulerPoint(ll){if(isClosed)return;if(isNearFirst(ll)){isClosed=true;rulerPoints[0].marker.getElement().style.boxShadow='0 0 0 4px rgba(66,133,244,.35)';redrawRuler();return;}const idx=rulerPoints.length;const marker=L.marker(ll,{icon:L.divIcon({className:'ruler-dot',iconSize:[14,14],iconAnchor:[7,7]}),draggable:true,zIndexOffset:500}).addTo(map);rulerPoints.push({latlng:ll,marker});marker.on('drag',e=>{rulerPoints[idx].latlng=e.target.getLatLng();redrawRuler();});marker.on('dblclick',e=>{L.DomEvent.stopPropagation(e);if(isClosed)return;map.removeLayer(marker);rulerPoints.splice(idx,1);rulerPoints.forEach((p,i)=>p.marker.off('drag').on('drag',ev=>{rulerPoints[i].latlng=ev.target.getLatLng();redrawRuler();}));redrawRuler();});if(rulerPoints.length>=3){const el=rulerPoints[0].marker.getElement();if(el)el.style.outline='2.5px dashed rgba(66,133,244,.7)';}redrawRuler();}
+function clearRuler(){rulerPoints.forEach(p=>map.removeLayer(p.marker));rulerLines.forEach(l=>map.removeLayer(l));rulerLabels.forEach(l=>map.removeLayer(l));if(rulerPolygon){map.removeLayer(rulerPolygon);rulerPolygon=null;}rulerPoints=[];rulerLines=[];rulerLabels=[];isClosed=false;updateRulerUI();}
+let rulerAwarded=false;
+function toggleRuler(){
+  rulerActive=!rulerActive;rulerBtn.classList.toggle('on',rulerActive);
+  document.body.classList.toggle('ruler-mode',rulerActive);
+  rulerHint.classList.toggle('show',rulerActive);
+  if(!rulerActive)clearRuler();
+  else{updateRulerUI();if(!rulerAwarded){rulerAwarded=true;G.ruler=(G.ruler||0)+1;saveGame(G);gainXP(10);trackDaily('ruler');checkAchievement('ruler1',G.ruler);}}
+}
+rulerBtn.addEventListener('click',toggleRuler);
+rulerClearBtn.addEventListener('click',e=>{e.stopPropagation();clearRuler();});
+
+/* PINS */
+const pinBtn=document.getElementById('pinBtn'),pinDialog=document.getElementById('pinDialog'),pinDialogOverlay=document.getElementById('pinDialogOverlay'),pinLabelInput=document.getElementById('pinLabelInput'),pinConfirmBtn=document.getElementById('pinConfirmBtn'),pinCancelBtn=document.getElementById('pinCancelBtn');
+let pinMode=false,pendingPin=null,pins=[];
+function togglePinMode(){pinMode=!pinMode;pinBtn.classList.toggle('on',pinMode);document.body.classList.toggle('pin-mode',pinMode);if(pinMode)toast('Кликните на карту, чтобы поставить метку');}
+pinBtn.addEventListener('click',togglePinMode);
+function openPinDialog(ll){pendingPin=ll;pinLabelInput.value='';pinDialog.classList.add('show');pinDialogOverlay.classList.add('show');setTimeout(()=>pinLabelInput.focus(),200);}
+function closePinDialog(){pinDialog.classList.remove('show');pinDialogOverlay.classList.remove('show');pendingPin=null;}
+function confirmPin(){
+  const label=pinLabelInput.value.trim()||'Метка';if(!pendingPin)return;
+  addPin(pendingPin,label);closePinDialog();
+  G.pins=(G.pins||0)+1;saveGame(G);gainXP(10,window.innerWidth/2,150);touchStreak();trackDaily('pins');
+  checkAchievement('pin1',G.pins);checkAchievement('pin10',G.pins);
+}
+pinConfirmBtn.addEventListener('click',confirmPin);pinCancelBtn.addEventListener('click',closePinDialog);pinDialogOverlay.addEventListener('click',closePinDialog);
+pinLabelInput.addEventListener('keydown',e=>{if(e.key==='Enter')confirmPin();if(e.key==='Escape')closePinDialog();});
+function addPin(latlng,label){const ih=`<div class="custom-pin"><div class="pin-head"><svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="rgba(255,255,255,0.4)"/></svg></div><div class="pin-tail"></div></div>`;const marker=L.marker(latlng,{icon:L.divIcon({html:ih,className:'',iconSize:[28,38],iconAnchor:[14,38]}),zIndexOffset:800}).addTo(map);const ph=`<div class="pin-popup"><div class="pin-popup-name">${label}</div><button class="pin-popup-del" onclick="removePin()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg> Удалить</button></div>`;marker.bindPopup(ph,{maxWidth:200,minWidth:140}).openPopup();pins.push({latlng,label,marker});}
+window.removePin=function(){const m=pins.find(p=>p.marker.isPopupOpen());if(m){map.removeLayer(m.marker);pins=pins.filter(p=>p!==m);}};
+
+/* MAP CLICK */
+map.on('click',async e=>{
+  if(rulerActive){addRulerPoint(e.latlng);return;}
+  if(routeActive&&routeStep){const step=routeStep;setPoint(step,e.latlng);try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&format=json&accept-language=ru`);const d=await r.json();if(d.display_name){const lbl=d.display_name.split(', ').slice(0,2).join(', ');if(step==='start'){rsStartLbl.textContent=lbl;}else{rsEndLbl.textContent=lbl;}}}catch{}return;}
+  if(pinMode){openPinDialog(e.latlng);return;}
+  fetchWiki(e.latlng);
+});
+
+/* SEARCH */
+const searchInput=document.getElementById('searchInput'),suggestions=document.getElementById('suggestions');
+let sugTimer,sugResults=[];
+const HIST_KEY='geogo_history',MAX_HIST=8;
+function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch{return[];}}
+function saveHistory(h){try{localStorage.setItem(HIST_KEY,JSON.stringify(h));}catch{}}
+function addToHistory(item){let h=loadHistory();h=h.filter(x=>x.name!==item.name);h.unshift(item);if(h.length>MAX_HIST)h=h.slice(0,MAX_HIST);saveHistory(h);}
+function removeFromHistory(name){saveHistory(loadHistory().filter(h=>h.name!==name));}
+function goTo(lat,lon,name,sub,sv=true){
+  map.setView([+lat,+lon],13,{animate:true});searchInput.value=name;suggestions.classList.remove('open');
+  if(sv){addToHistory({name,sub,lat,lon});G.searches=(G.searches||0)+1;saveGame(G);gainXP(5);touchStreak();trackDaily('searches');checkAchievement('search5',G.searches);}
+}
+function buildHistRows(hist){return hist.map((h,i)=>`<div class="hist-row"><button class="hist-btn" data-hi="${i}"><span style="opacity:.45;flex-shrink:0">${ICO_HIST}</span><div style="min-width:0;flex:1;overflow:hidden"><div class="sug-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.name}</div>${h.sub?`<div class="sug-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.sub}</div>`:''}</div></button><button class="sug-del" data-del="${i}">${ICO_DEL}</button></div>`).join('');}
+function bindHistEvents(container,onClearAll){container.querySelectorAll('.hist-btn').forEach(b=>b.addEventListener('click',()=>{const h=loadHistory()[+b.dataset.hi];if(h)goTo(h.lat,h.lon,h.name,h.sub,false);}));container.querySelectorAll('.sug-del').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const h=loadHistory()[+b.dataset.del];if(h){removeFromHistory(h.name);onClearAll();}}));const clrBtn=container.querySelector('.hist-clear-all');if(clrBtn)clrBtn.addEventListener('click',e=>{e.stopPropagation();saveHistory([]);suggestions.classList.remove('open');toast('История очищена');});}
+function renderHistory(){const hist=loadHistory();if(!hist.length){suggestions.classList.remove('open');return;}suggestions.innerHTML=`<div class="sug-sep-row"><span class="sug-sep">История</span><button class="hist-clear-all">Очистить всё</button></div>`+buildHistRows(hist);suggestions.classList.add('open');bindHistEvents(suggestions,renderHistory);}
+function renderSuggestions(items){const hist=loadHistory();if(!items.length&&!hist.length){suggestions.classList.remove('open');return;}let html='';if(items.length)html+=`<span class="sug-sep">Результаты</span>`+items.map((it,i)=>{const p=it.display_name.split(', ');return`<button class="sug-item" data-i="${i}"><span style="opacity:.45;flex-shrink:0">${ICO_PIN}</span><div><div class="sug-name">${p[0]}</div><div class="sug-sub">${p.slice(1,3).join(', ')}</div></div></button>`;}).join('');if(hist.length)html+=`<div class="sug-sep-row"><span class="sug-sep">История</span><button class="hist-clear-all">Очистить всё</button></div>`+buildHistRows(hist);suggestions.innerHTML=html;suggestions.classList.add('open');suggestions.querySelectorAll('.sug-item[data-i]').forEach(b=>b.addEventListener('click',()=>{const it=sugResults[+b.dataset.i];const p=it.display_name.split(', ');goTo(it.lat,it.lon,p[0],p.slice(1,3).join(', '));}));bindHistEvents(suggestions,()=>renderSuggestions(sugResults));}
+searchInput.addEventListener('focus',()=>{if(!searchInput.value.trim())renderHistory();});
+searchInput.addEventListener('input',()=>{clearTimeout(sugTimer);const q=searchInput.value.trim();if(!q){renderHistory();return;}if(q.length<2){suggestions.classList.remove('open');return;}sugTimer=setTimeout(()=>fetchSug(q),280);});
+async function fetchSug(q){try{const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5&accept-language=ru');sugResults=await r.json();renderSuggestions(sugResults);}catch(e){}}
+document.addEventListener('click',e=>{if(!searchInput.closest('#searchWrap').contains(e.target))suggestions.classList.remove('open');});
+searchInput.addEventListener('keydown',e=>{if(e.key==='Enter'){suggestions.classList.remove('open');if(sugResults.length){const it=sugResults[0];const p=it.display_name.split(', ');goTo(it.lat,it.lon,p[0],p.slice(1,3).join(', '));}searchInput.blur();}if(e.key==='Escape'){suggestions.classList.remove('open');searchInput.blur();}});
+
+/* WIKIPEDIA */
+const wikiPanel=document.getElementById('wikiPanel'),wikiOverlay=document.getElementById('wikiOverlay'),wikiClose=document.getElementById('wikiClose'),wikiTitle=document.getElementById('wikiTitle'),wikiDist=document.getElementById('wikiDist'),wikiBody=document.getElementById('wikiBody');
+let wikiMarker=null;
+function openWiki(){wikiPanel.classList.add('show');wikiOverlay.classList.add('show');}
+function closeWiki(){wikiPanel.classList.remove('show');wikiOverlay.classList.remove('show');if(wikiMarker){map.removeLayer(wikiMarker);wikiMarker=null;}}
+wikiClose.addEventListener('click',closeWiki);wikiOverlay.addEventListener('click',closeWiki);
+function fmtWikiDist(m){if(m<1000)return Math.round(m)+' м от клика';return(m/1000).toFixed(1)+' км от клика';}
+async function fetchWiki(latlng){
+  wikiTitle.textContent='Поиск...';wikiDist.textContent='';
+  wikiBody.innerHTML=`<div class="wiki-loading"><div class="wiki-spinner"></div>Ищем статью рядом...</div>`;
+  openWiki();
+  try{
+    const geoRes=await fetch(`https://ru.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${latlng.lat}|${latlng.lng}&gsradius=10000&gslimit=1&format=json&origin=*`);
+    const geoData=await geoRes.json();const places=geoData?.query?.geosearch;
+    if(!places||!places.length){
+      const geoResEn=await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${latlng.lat}|${latlng.lng}&gsradius=10000&gslimit=1&format=json&origin=*`);
+      const geoDataEn=await geoResEn.json();const placesEn=geoDataEn?.query?.geosearch;
+      if(!placesEn||!placesEn.length){wikiBody.innerHTML=`<div class="wiki-none"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><br>Статей Википедии рядом не найдено</div>`;wikiTitle.textContent='Ничего не найдено';return;}
+      await showWikiArticle(placesEn[0],'en',latlng);return;
+    }
+    await showWikiArticle(places[0],'ru',latlng);
+  }catch(err){wikiBody.innerHTML=`<div class="wiki-none">Ошибка загрузки статьи</div>`;}
+}
+async function showWikiArticle(place,lang,clickLatlng){
+  const pageId=place.pageid,dist=L.latLng(place.lat,place.lon).distanceTo(clickLatlng),wikiBase=`https://${lang}.wikipedia.org`;
+  const sumRes=await fetch(`${wikiBase}/w/api.php?action=query&pageids=${pageId}&prop=extracts|pageimages|info&exintro=1&explaintext=1&exchars=800&piprop=thumbnail&pithumbsize=600&inprop=url&format=json&origin=*`);
+  const sumData=await sumRes.json();const page=sumData.query.pages[pageId];
+  wikiTitle.textContent=page.title;wikiDist.textContent=fmtWikiDist(dist);
+  if(wikiMarker)map.removeLayer(wikiMarker);
+  wikiMarker=L.circleMarker([place.lat,place.lon],{radius:8,color:'#4285f4',weight:2.5,fillColor:'#4285f4',fillOpacity:.25}).addTo(map);
+  const thumb=page.thumbnail?.source,extract=page.extract||'Нет описания.',articleUrl=page.fullurl||`${wikiBase}/wiki/${encodeURIComponent(page.title)}`;
+  wikiBody.innerHTML=(thumb?`<img class="wiki-thumb" src="${thumb}" alt="${page.title}" loading="lazy">`:'')
+    +`<div class="wiki-extract">${extract.replace(/\n/g,'<br><br>')}</div>`
+    +`<button class="wiki-readmore" onclick="window.open('${articleUrl}','_blank')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Читать на Википедии</button>`;
+  G.wiki=(G.wiki||0)+1;saveGame(G);gainXP(8);touchStreak();trackDaily('wiki');checkAchievement('wiki1',G.wiki);checkAchievement('wiki10',G.wiki);
+}
+
+/* MUSIC PLAYER */
+const musicBtn=document.getElementById('musicBtn');
+const musicMenu=document.getElementById('musicMenu');
+const musicVolume=document.getElementById('musicVolume');
+let musicAudio=null,currentTrackBtn=null;
+musicBtn.addEventListener('click',e=>{e.stopPropagation();musicMenu.classList.toggle('open');});
+document.addEventListener('click',e=>{if(!musicBtn.contains(e.target)&&!musicMenu.contains(e.target)){musicMenu.classList.remove('open');}});
+document.querySelectorAll('.mm-track').forEach(btn=>{btn.addEventListener('click',()=>{const src=btn.dataset.src;const name=btn.dataset.name;if(currentTrackBtn===btn){if(musicAudio){musicAudio.pause();musicAudio=null;}btn.classList.remove('active');currentTrackBtn=null;musicBtn.classList.remove('playing');musicBtn.title='Фоновая музыка';return;}if(musicAudio){musicAudio.pause();musicAudio=null;}if(currentTrackBtn)currentTrackBtn.classList.remove('active');musicAudio=new Audio(src);musicAudio.loop=true;musicAudio.volume=musicVolume.value/100;musicAudio.play().catch(()=>toast('Не удалось воспроизвести','err'));btn.classList.add('active');currentTrackBtn=btn;musicBtn.classList.add('playing');musicBtn.title='Играет: '+name;toast(''+name,'ok');musicAudio.addEventListener('error',()=>{toast('Ошибка загрузки трека','err');btn.classList.remove('active');currentTrackBtn=null;musicBtn.classList.remove('playing');});});});
+musicVolume.addEventListener('input',()=>{const v=musicVolume.value;musicVolume.style.setProperty('--v',v+'%');if(musicAudio)musicAudio.volume=v/100;});
+
+setTimeout(locate,600);
+</script>
+</body>
+</html>
