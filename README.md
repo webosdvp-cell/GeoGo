@@ -1,7 +1,6 @@
 # 🌍 GeoGo
 
-> Интерактивная карта с маршрутами, метками, геймификацией и путешествиями по всему миру
-
+>  An interactive map with routes, labels, gamification, and travel around the world
 ---
 
 ## 📖 English
