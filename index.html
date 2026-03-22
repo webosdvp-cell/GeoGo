@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoGo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topbar">
+  <div id="searchWrap">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchInput" type="text" placeholder="Поиск городов и мест..." autocomplete="off">
+    <div id="suggestions"></div>
+  </div>
+  <button id="shareBtn" title="Поделиться">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+  </button>
+</div>
+
+<!-- Music Button -->
+<button id="musicBtn" title="Фоновая музыка">
+  <svg class="music-note" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+</button>
+
+<!-- Music Menu -->
+<div id="musicMenu">
+  <span class="mm-title">Расслабляющая музыка</span>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" data-name="Lofi Rain" data-sub="дождь · фортепиано">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="19" x2="8" y2="5"/><line x1="12" y1="19" x2="12" y2="9"/><line x1="4" y1="19" x2="4" y2="13"/><path d="M2 3l4-1v4L2 7"/><path d="M16 3h4v4l-4 1V3z"/><path d="M12 13l8-2"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Lofi Rain</div><div class="mm-sub">дождь · фортепиано</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" data-name="Forest Calm" data-sub="лес · природа">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14l-5-10-5 10"/><path d="M3 20l7-6h4l7 6"/><line x1="12" y1="20" x2="12" y2="4"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Forest Calm</div><div class="mm-sub">лес · природа</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" data-name="Ocean Waves" data-sub="океан · медитация">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 7c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Ocean Waves</div><div class="mm-sub">океан · медитация</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" data-name="Night Jazz" data-sub="джаз · ночь">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Night Jazz</div><div class="mm-sub">джаз · ночь</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" data-name="Zen Ambient" data-sub="эмбиент · зен">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Zen Ambient</div><div class="mm-sub">эмбиент · зен</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <button class="mm-track" data-src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" data-name="Piano Dreams" data-sub="фортепиано · классика">
+    <div class="mm-ico" style="background:#e8f0fe;color:#4285f4"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M8 6V4M12 6V4M16 6V4"/><line x1="6" y1="10" x2="6" y2="16"/><line x1="10" y1="10" x2="10" y2="16"/><line x1="14" y1="10" x2="14" y2="16"/><line x1="18" y1="10" x2="18" y2="16"/><rect x="8" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="12" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/></svg></div>
+    <div class="mm-info"><div class="mm-name">Piano Dreams</div><div class="mm-sub">фортепиано · классика</div></div>
+    <div class="mm-bars"><span></span><span></span><span></span></div>
+  </button>
+  <div class="mm-sep"></div>
+  <div class="mm-vol">
+    <div class="mm-vol-ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    </div>
+    <input type="range" id="musicVolume" min="0" max="100" value="50" style="--v:50%">
+  </div>
+</div>
+
+<!-- Route Sheet -->
+<div id="routeSheet">
+  <div class="rs-handle"></div>
+  <div class="rs-body">
+    <div class="rs-header">
+      <div class="rs-title"><div class="rs-title-dot"></div>Маршрут</div>
+      <button id="rsSaveBtn" title="Сохранить маршрут">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Сохранить
+      </button>
+      <button id="rsOpenSavedBtn" title="Мои маршруты">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button id="routeSheetClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="rs-inputs">
+      <div class="rs-field">
+        <div class="rs-dot start"></div>
+        <div class="rs-field-label" id="rsStartLbl">Откуда...</div>
+        <button class="rs-field-clear" id="rsStartClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="rs-field">
+        <div class="rs-dot end"></div>
+        <div class="rs-field-label" id="rsEndLbl">Куда...</div>
+        <button class="rs-field-clear" id="rsEndClr"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="rs-tabs">
+      <button class="rs-tab on" data-mode="driving">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+        <span class="rs-tab-time" id="tt-driving">—</span>
+        <span class="rs-tab-name">Авто</span>
+      </button>
+      <button class="rs-tab" data-mode="cycling">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+        <span class="rs-tab-time" id="tt-cycling">—</span>
+        <span class="rs-tab-name">Вело</span>
+      </button>
+      <button class="rs-tab" data-mode="walking">
+        <span class="rs-tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="1.5"/><path d="M9 8l1 4-3 3 1 1 3-2 1 4h2l1-5 2 2v4h1v-5l-3-3 1-4"/></svg></span>
+        <span class="rs-tab-time" id="tt-walking">—</span>
+        <span class="rs-tab-name">Пешком</span>
+      </button>
+    </div>
+    <div class="rs-result" id="rsResult" data-mode="driving">
+      <div class="rs-result-icon" id="rsIcon"></div>
+      <div class="rs-result-main">
+        <div class="rs-result-time" id="rsTime">—</div>
+        <div class="rs-result-sub" id="rsSub"></div>
+      </div>
+      <div class="rs-result-dist" id="rsDist"></div>
+    </div>
+  </div>
+</div>
+
+<div class="route-chip" id="routeChip"></div>
+
+<div id="sidebar">
+  <!-- Кнопки меню (скрыты по умолчанию) -->
+  <button id="xpBadge" title="Мой профиль">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    <div class="xp-pip" id="xpPip">1</div>
+  </button>
+  <button class="fab" id="pinBtn" title="Метка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+  </button>
+  <button class="fab" id="routeBtn" title="Маршрут">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </button>
+  <button class="fab" id="rulerBtn" title="Линейка">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12"/><polyline points="6 8 2 12 6 16"/><polyline points="18 8 22 12 18 16"/></svg>
+  </button>
+  <button class="fab" id="menuBtn" title="Слои">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+  </button>
+  <button class="fab" id="randomBtn" title="Случайное место">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+  </button>
+  <!-- Кнопка-гамбургер (всегда видна) -->
+  <button class="fab" id="sidebarToggle" title="Меню">
+    <svg id="toggleIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="20" y2="18"/>
+    </svg>
+  </button>
+  <!-- Местоположение (всегда видна) -->
+  <button class="fab" id="locBtn" title="Местоположение">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 3" opacity=".4"/></svg>
+  </button>
+</div>
+
+<div id="mapMenu">
+  <span class="menu-title">Тип карты</span>
+  <div class="mbase-grid">
+    <button class="mbase-btn on" data-t="light"><div class="mb-ico"><img src="https://tile.openstreetmap.org/6/32/21.png" alt=""></div>Обычная</button>
+    <button class="mbase-btn" data-t="dark"><div class="mb-ico"><img src="https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/6/32/21.png" alt=""></div>Тёмная</button>
+    <button class="mbase-btn" data-t="sat"><div class="mb-ico"><img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt=""></div>Спутник</button>
+    <button class="mbase-btn" data-t="hyb">
+      <div class="mb-ico" style="position:relative">
+        <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/6/21/32" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <img src="https://cartodb-basemaps-a.global.ssl.fastly.net/light_only_labels/6/32/21.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85">
+      </div>Гибрид
+    </button>
+  </div>
+  <div class="menu-sep"></div>
+  <span class="menu-title">Слои</span>
+  <button class="mlay" id="layTraffic"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div><div class="mlay-info"><div class="mlay-name">Пробки</div><div class="mlay-sub">TomTom Flow</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layWeather"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></div><div class="mlay-info"><div class="mlay-name">Погода</div><div class="mlay-sub">Осадки (OpenMeteo)</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layBike"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></div><div class="mlay-info"><div class="mlay-name">Велодорожки</div><div class="mlay-sub">CyclOSM</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layTerrain"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-12 4 7 3-5 5 10"/></svg></div><div class="mlay-info"><div class="mlay-name">Рельеф</div><div class="mlay-sub">Горы и высоты</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layRail"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16"/><path d="M8 3v8M16 3v8"/><path d="M8 17l-2 4M16 17l2 4"/></svg></div><div class="mlay-info"><div class="mlay-name">ЖД пути</div><div class="mlay-sub">OpenRailwayMap</div></div><div class="mlay-toggle"></div></button>
+  <button class="mlay" id="layHike"><div class="mlay-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M6.5 18c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M3 20h18"/></svg></div><div class="mlay-info"><div class="mlay-name">Пешие тропы</div><div class="mlay-sub">Waymarked Trails</div></div><div class="mlay-toggle"></div></button>
+</div>
+
+<div id="rulerHint">
+  <span class="hint-text" id="rulerHintText">Кликните на карту, чтобы начать</span>
+  <span class="dist-val" id="rulerDist" style="display:none"></span>
+  <button id="rulerClearBtn">✕ Сбросить</button>
+</div>
+
+<div id="pinDialogOverlay"></div>
+<div id="pinDialog">
+  <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Новая метка</h3>
+  <input id="pinLabelInput" type="text" placeholder="Название места..." maxlength="40" autocomplete="off">
+  <div class="pin-dialog-btns">
+    <button id="pinCancelBtn">Отмена</button>
+    <button id="pinConfirmBtn">Добавить</button>
+  </div>
+</div>
+
+<div id="savedOverlay"></div>
+<div id="savedPanel">
+  <div class="sp-header">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4285f4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    <span class="sp-title">Сохранённые маршруты</span>
+    <button id="savedClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sp-body" id="spBody"></div>
+</div>
+
+<div id="saveRouteOverlay"></div>
+<div id="saveRouteDialog">
+  <h3>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Сохранить маршрут
+  </h3>
+  <input id="saveRouteNameInput" type="text" placeholder="Название маршрута..." maxlength="40" autocomplete="off">
+  <div class="srd-btns">
+    <button id="srdCancelBtn">Отмена</button>
+    <button id="srdConfirmBtn">Сохранить</button>
+  </div>
+</div>
+
+<div id="wikiOverlay"></div>
+<div id="wikiPanel">
+  <div class="wiki-handle"></div>
+  <div class="wiki-header">
+    <div class="wiki-logo">W</div>
+    <div class="wiki-header-text">
+      <div class="wiki-title" id="wikiTitle">Wikipedia</div>
+      <div class="wiki-dist" id="wikiDist"></div>
+    </div>
+    <button id="wikiClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="wiki-body" id="wikiBody"></div>
+</div>
+
+<div id="avatarPickerOverlay"></div>
+<div id="avatarPicker">
+  <div class="ap-handle"></div>
+  <div class="ap-header">
+    <span class="ap-title">Кастомизация профиля</span>
+    <button id="apClose"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="ap-body">
+    <div class="ap-tabs">
+      <button class="ap-tab active" data-tab="avatar">Аватар</button>
+      <button class="ap-tab" data-tab="color">Цвет</button>
+      <button class="ap-tab" data-tab="profile">Профиль</button>
+    </div>
+
+    <!-- TAB: Avatar -->
+    <div class="ap-tab-panel active" id="apTabAvatar">
+      <div class="ap-section-lbl">SVG иконки</div>
+      <div class="ap-grid" id="apGrid"></div>
+      <div class="ap-section-lbl">Эмодзи</div>
+      <div class="ap-grid" id="apEmojiGrid"></div>
+      <div class="ap-section-lbl">Свой символ</div>
+      <div class="ap-custom-sym">
+        <input type="text" id="apCustomSymInput" maxlength="2" placeholder="★">
+        <span class="ap-custom-sym-lbl">Введите любой символ, букву или эмодзи</span>
+      </div>
+    </div>
+
+    <!-- TAB: Color -->
+    <div class="ap-tab-panel" id="apTabColor">
+      <div class="ap-section-lbl">Готовые цвета</div>
+      <div class="ap-colors" id="apColors"></div>
+      <div class="ap-section-lbl" style="margin-top:14px">Своя палитра</div>
+      <div class="ap-colorpicker-wrap">
+        <div class="ap-grad-row" style="margin-bottom:6px">
+          <span class="ap-grad-lbl">Редактировать:</span>
+          <div class="ap-grad-swatch active" id="apGradSwatch1" title="Цвет 1"></div>
+          <div class="ap-grad-swatch" id="apGradSwatch2" title="Цвет 2"></div>
+          <div class="ap-grad-preview" id="apGradPreview"></div>
+        </div>
+        <div class="ap-cp-canvas-wrap">
+          <canvas id="apColorCanvas" width="320" height="160"></canvas>
+          <div class="ap-cp-cursor" id="apCpCursor"></div>
+        </div>
+        <div>
+          <div class="ap-cp-lbl">Оттенок</div>
+          <input type="range" id="apHueSlider" min="0" max="360" value="220">
+        </div>
+        <div>
+          <div class="ap-cp-lbl">HEX код</div>
+          <div class="ap-cp-hex-row">
+            <input type="text" class="ap-cp-hex-input" id="apHexInput1" placeholder="#4285f4" maxlength="7">
+            <button class="ap-cp-apply" id="apHexApply1">OK</button>
+          </div>
+        </div>
+        <div class="ap-cp-preview">
+          <div class="ap-cp-preview-box" id="apCpPreviewBox"></div>
+          <div style="font-size:12px;color:#5f6368;flex:1">Предпросмотр выбранного цвета</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Profile -->
+    <div class="ap-tab-panel" id="apTabProfile">
+      <div class="ap-username-wrap">
+        <div class="ap-field-row">
+          <div class="ap-field-lbl">НИКНЕЙМ</div>
+          <div class="ap-field-input-wrap">
+            <input class="ap-field-input" id="apNicknameInput" type="text" maxlength="20" placeholder="Твоё имя...">
+          </div>
+          <div class="ap-field-hint" id="apNicknameHint">Отображается в профиле</div>
+        </div>
+        <div class="ap-field-row" style="margin-top:14px">
+          <div class="ap-field-lbl">USERNAME</div>
+          <div class="ap-field-input-wrap">
+            <div class="ap-field-prefix">@</div>
+            <input class="ap-field-input" id="apUsernameInput" type="text" maxlength="20" placeholder="username" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="ap-field-hint" id="apUsernameHint">Только буквы, цифры и _</div>
+        </div>
+        <button id="apProfileSave" style="margin-top:18px;width:100%;padding:12px;border-radius:12px;border:none;background:#4285f4;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s">Сохранить профиль</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverlay"></div>
+<div id="gamePanel">
+  <div class="gp-hero">
+    <div class="gp-hero-top">
+      <div class="gp-avatar-big" id="gpAvatarBig" title="Сменить аватарку">
+        <span id="gpAvatarIcon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+        <div class="ava-edit-hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+      </div>
+      <div class="gp-hero-info">
+        <div class="gp-hero-name-wrap">
+          <div class="gp-hero-name" id="gpLevelName">Новичок</div>
+          <button class="gp-hero-name-edit" id="gpNameEditBtn" title="Изменить имя">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+        <input class="gp-hero-name-input" id="gpNameInput" type="text" maxlength="20" placeholder="Ваше имя...">
+        <div class="gp-hero-sub" id="gpLevelSub">Уровень 1</div>
+        <div class="gp-hero-sub" id="gpUsernameSub" style="opacity:.7;font-size:11px;margin-top:1px"></div>
+      </div>
+      <button class="gp-close" id="gpClose">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gp-level-badge">
+      <div class="gp-xp-row">
+        <span class="gp-xp-label" id="gpXpLabel">0 / 100 XP</span>
+        <span class="gp-xp-nums" id="gpLvlBig">Ур. 1</span>
+      </div>
+      <div class="gp-xp-track"><div class="gp-xp-track-fill" id="gpXpFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="gp-stats-row">
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <div class="gp-stat-val" id="statPins">0</div>
+      <div class="gp-stat-lbl">Метки</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <div class="gp-stat-val" id="statRoutes">0</div>
+      <div class="gp-stat-lbl">Маршруты</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+      <div class="gp-stat-val" id="statWiki">0</div>
+      <div class="gp-stat-lbl">Статьи</div>
+    </div>
+    <div class="gp-stat">
+      <div class="gp-stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <div class="gp-stat-val" id="statXpTotal">0</div>
+      <div class="gp-stat-lbl">Всего XP</div>
+    </div>
+  </div>
+
+  <div class="gp-body" id="gpBody">
+    <div class="gp-section">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Активность
+      </div>
+      <div class="gp-streak-card">
+        <div class="gp-streak-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <div class="gp-streak-val" id="streakVal">0</div>
+          <div class="gp-streak-lbl">дней подряд</div>
+          <div class="gp-streak-best" id="streakBest">Рекорд: 0 дн.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gp-section">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Ежедневные задания
+      </div>
+      <div id="challengesList"></div>
+    </div>
+
+    <div class="gp-section" style="padding-bottom:24px">
+      <div class="gp-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+        Достижения
+      </div>
+      <div class="gp-achievements" id="achGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="levelUpOverlay">
+  <div class="lu-card">
+    <div class="lu-particles" id="luParticles"></div>
+    <div class="lu-ring">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <div class="lu-headline">Новый уровень!</div>
+    <div class="lu-level" id="luLevel">2</div>
+    <div class="lu-name" id="luName">Исследователь</div>
+  </div>
+</div>
+
+<div class="ach-toast" id="achToast">
+  <div class="ach-toast-ico" id="achToastIco"></div>
+  <div class="ach-toast-text">
+    <div class="ach-toast-title">Достижение разблокировано</div>
+    <div class="ach-toast-name" id="achToastName"></div>
+  </div>
+</div>
+
+<div id="credit">Made by <a href="https://t.me/revos9" target="_blank">@revos9</a></div>
+<div id="toast"></div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="script.js"></script>
+</body>
+                                                                                                                                                                                                                                                                                                                                    </html>
