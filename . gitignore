@@ -1,0 +1,61 @@
+# Dependency directories
+node_modules/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Lock files (consider removing if using lockfile in version control)
+package-lock.json
+yarn.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp      # Vim swap files
+*.swo      # Vim swap files
+*~         # Backup files from various editors
+.DS_Store  # macOS Finder metadata
+Thumbs.db  # Windows thumbnail cache
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.cache
+desktop.ini    # Windows folder settings
+ehthumbs.db    # Windows thumbnail database
+
+# Database files
+*.db
+
+# Build output directories
+dist/
+build/
+
+# Minified assets (if generating minified files during build)
+*.min.css
+*.min.js
+
+# Environment configuration files
+.env
+.env.local
+.env.*.local
+config.local.*
+
+# Private keys and certificates
+*.key
+*.pem
+
+# Sass/SCSS cache
+.sass-cache/
+
+# Source maps
+*.css.map
+*.js.map
+
+# Backup files
+*.bak
+*.old
+*.orig
